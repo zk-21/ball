@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>选号模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260513-7" />
+    <link rel="stylesheet" href="styles.css?v=20260513-10" />
   </head>
   <body>
     <section id="appLock" class="app-lock">
@@ -34,7 +34,7 @@
         <div class="controls">
           <label>
             <span>行</span>
-            <input id="rowInput" type="number" min="1" max="50" value="1" />
+            <input id="rowInput" type="number" min="1" max="55" value="1" />
           </label>
           <label>
             <span>区</span>
@@ -100,6 +100,7 @@
         <div class="history-top">
           <h2>生成开奖版本</h2>
           <button id="generateDrawVersionButton" type="button">生成版本</button>
+          <button id="cancelEditDrawVersionButton" type="button" hidden>取消修改</button>
         </div>
         <div class="draw-import-body">
           <label>
@@ -160,6 +161,6 @@
       </div>
     </main>
 
-    <script src="script.js?v=20260513-7"></script>
+    <script src="script.js?v=20260513-10"></script>
   </body>
 </html>

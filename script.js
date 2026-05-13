@@ -37,6 +37,7 @@ const versionPreviewTitle = document.querySelector("#versionPreviewTitle");
 const drawDateInput = document.querySelector("#drawDateInput");
 const drawDataInput = document.querySelector("#drawDataInput");
 const generateDrawVersionButton = document.querySelector("#generateDrawVersionButton");
+const cancelEditDrawVersionButton = document.querySelector("#cancelEditDrawVersionButton");
 const drawImportMessage = document.querySelector("#drawImportMessage");
 const versionModal = document.querySelector("#versionModal");
 const versionModalTitle = document.querySelector("#versionModalTitle");
@@ -44,7 +45,9 @@ const versionModalBody = document.querySelector("#versionModalBody");
 const closeVersionModalButton = document.querySelector("#closeVersionModalButton");
 const swatches = [...document.querySelectorAll(".swatch")];
 
-const rows = 50;
+const drawRows = 50;
+const extraPickRows = 5;
+const rows = drawRows + extraPickRows;
 const pagePasswordValue = "zk@001";
 const versionPasswordValue = "zk@001";
 const pageAuthStorageKey = "lottery-page-auth";
@@ -63,6 +66,7 @@ let versions = readStorage(versionStorageKey);
 let versionsUnlocked = sessionStorage.getItem(versionAuthStorageKey) === "true";
 let currentBaseTitle = "";
 let userAdjustedZoom = false;
+let editingDrawVersionId = "";
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -145,6 +149,64 @@ function cloneBalls(balls) {
 
 function makeBall(row, zone, number, color) {
   return { row, zone, number, label: pad(number), color };
+}
+
+function isDrawVersion(version) {
+  const title = String(version?.title || "");
+  const id = String(version?.id || "");
+  return (
+    version?.kind === "draw" ||
+    id.startsWith("manual-draw-") ||
+    id.startsWith("preset-latest-draw-") ||
+    /^\d{4}-\d{2}-\d{2}/.test(title)
+  );
+}
+
+function normalizeVersionRecord(version) {
+  if (!version) return version;
+  version.kind = isDrawVersion(version) ? "draw" : version.kind || "custom";
+  return version;
+}
+
+function normalizeExistingVersions() {
+  versions = versions.map(normalizeVersionRecord);
+  writeStorage(versionStorageKey, versions);
+}
+
+function getDateFromVersion(version) {
+  const fromDate = String(version?.drawDate || "").match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const fromTitle = String(version?.title || "").match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const fromTime = String(version?.time || "").match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  return fromDate || fromTitle || fromTime || "";
+}
+
+function reconstructDrawText(version) {
+  if (version?.sourceText) return version.sourceText;
+  const grouped = new Map();
+  cloneBalls(version?.balls).forEach((ball) => {
+    if (!grouped.has(ball.row)) grouped.set(ball.row, { front: [], back: [] });
+    grouped.get(ball.row)[ball.zone === "back" ? "back" : "front"].push(ball.number);
+  });
+  return [...grouped.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, draw]) => [...draw.front, ...draw.back].map(pad).join(" "))
+    .join("\n");
+}
+
+function clearDrawEditMode() {
+  editingDrawVersionId = "";
+  generateDrawVersionButton.textContent = "生成版本";
+  cancelEditDrawVersionButton.hidden = true;
+}
+
+function startDrawEditMode(version) {
+  editingDrawVersionId = version.id;
+  drawDateInput.value = getDateFromVersion(version);
+  drawDataInput.value = reconstructDrawText(version);
+  generateDrawVersionButton.textContent = "保存修改";
+  cancelEditDrawVersionButton.hidden = false;
+  drawImportMessage.textContent = `正在修改 ${version.title || "开奖版本"}，保存后会覆盖这个版本。`;
+  document.querySelector(".draw-import-shell")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function collectBalls() {
@@ -362,6 +424,7 @@ function buildBoard() {
         cell.dataset.zone = zone;
         cell.dataset.number = number;
         cell.dataset.value = value;
+        if (row > drawRows) cell.dataset.pick = "true";
         cell.textContent = value;
         cell.title = `${config.label} 第 ${row} 行，${value} 号`;
         fragment.append(cell);
@@ -441,6 +504,9 @@ function seedLatestDrawVersion() {
   const id = "preset-latest-draw-2026051";
   const latestVersion = {
     id,
+    kind: "draw",
+    drawDate: "2026-05-11",
+    protected: true,
     time: "2026-05-11 00:00:00",
     timestamp: new Date("2026-05-11T00:00:00").getTime(),
     title,
@@ -463,6 +529,7 @@ function saveVersion() {
   const time = formatTime();
   const version = {
     id: makeId(),
+    kind: "custom",
     time,
     timestamp: Date.now(),
     title: `版本 ${time}`,
@@ -515,19 +582,57 @@ function parseDrawLines(text) {
     });
 }
 
+function extractDrawDate(text) {
+  const normalized = String(text || "")
+    .replace(/[年月]/g, "-")
+    .replace(/日/g, "");
+  const match = normalized.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+  if (!match) return "";
+  return `${match[1]}-${pad(match[2])}-${pad(match[3])}`;
+}
+
+function parseDrawLinesSafe(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const issue = line.match(/\b(20\d{5})\b/)?.[1] || "";
+      const date = extractDrawDate(line);
+      const cleanLine = line
+        .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, " ")
+        .replace(/20\d{2}年\d{1,2}月\d{1,2}日?/g, " ")
+        .replace(/\b20\d{5,}\b/g, " ");
+      const numbers = (cleanLine.match(/\b\d{1,2}\b/g) || []).map(Number);
+      if (numbers.length < 7) return null;
+      const drawNumbers = numbers.slice(-7);
+      const front = drawNumbers.slice(0, 5);
+      const back = drawNumbers.slice(5, 7);
+      if (!front.every((number) => number >= 1 && number <= 35)) return null;
+      if (!back.every((number) => number >= 1 && number <= 12)) return null;
+      return { issue, date, front, back };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aKey = a.issue || a.date || "";
+      const bKey = b.issue || b.date || "";
+      return aKey.localeCompare(bKey);
+    });
+}
+
 function generateDrawVersion() {
   const drawText = drawDataInput.value.trim();
-  const parsedDraws = parseDrawLines(drawText);
+  const parsedDraws = parseDrawLinesSafe(drawText);
   if (parsedDraws.length === 0) {
     drawImportMessage.textContent = "没有解析到有效开奖数据。请保证每行至少包含 5 个前区和 2 个后区号码。";
     return;
   }
 
   const latestParsedDate = [...parsedDraws].reverse().find((draw) => draw.date)?.date;
-  const date = drawDateInput.value || latestParsedDate || extractDate(drawText) || new Date().toISOString().slice(0, 10);
+  const date = drawDateInput.value || latestParsedDate || extractDrawDate(drawText) || new Date().toISOString().slice(0, 10);
   const red = "#d6202a";
   const blue = "#1768b7";
-  const sourceDraws = parsedDraws.slice(-rows);
+  const sourceDraws = parsedDraws.slice(-drawRows);
   const balls = sourceDraws.flatMap((draw, index) => {
     const row = index + 1;
     return [
@@ -537,19 +642,33 @@ function generateDrawVersion() {
   });
   const title = `${date}版本`;
   const version = {
-    id: `manual-draw-${date}-${makeId()}`,
+    id: editingDrawVersionId || `manual-draw-${date}-${makeId()}`,
+    kind: "draw",
+    drawDate: date,
+    sourceText: drawText,
     time: `${date} 00:00:00`,
     timestamp: new Date(`${date}T00:00:00`).getTime() || Date.now(),
     title,
     balls,
   };
 
-  versions.unshift(version);
+  const wasEditing = Boolean(editingDrawVersionId);
+  if (wasEditing) {
+    const index = versions.findIndex((item) => item.id === editingDrawVersionId);
+    if (index >= 0) {
+      versions[index] = { ...versions[index], ...version };
+    } else {
+      versions.unshift(version);
+    }
+  } else {
+    versions.unshift(version);
+  }
   versions = versions.slice(0, 80);
   writeStorage(versionStorageKey, versions);
-  drawImportMessage.textContent = `已生成 ${title}，共 ${sourceDraws.length} 期、${balls.length} 个球。`;
+  clearDrawEditMode();
+  drawImportMessage.textContent = `${wasEditing ? "已修改" : "已生成"} ${title}，共 ${sourceDraws.length} 期、${balls.length} 个球。`;
   applyBalls(balls, { baseTitle: title });
-  addHistory(`生成 ${title}`, balls);
+  addHistory(`${wasEditing ? "修改" : "生成"} ${title}`, balls);
   renderVersions();
   showVersion(version.id);
 }
@@ -604,7 +723,7 @@ function renderVersions() {
 
     const info = document.createElement("div");
     info.className = "version-info";
-    info.innerHTML = `<strong>${version.title || "历史版本"}</strong><span>${balls.length} 个球</span>`;
+    info.innerHTML = `<strong>${version.title || "历史版本"}</strong><span>${balls.length} 个球 · ${isDrawVersion(version) ? "开奖版本" : "调整版本"}</span>`;
 
     const actions = document.createElement("div");
     actions.className = "version-actions";
@@ -625,6 +744,14 @@ function renderVersions() {
       showVersion(version.id);
       addHistory(`基于 ${version.title || "历史版本"} 调整`, version.balls);
     });
+
+    if (isDrawVersion(version) && !version.protected) {
+      const editButton = document.createElement("button");
+      editButton.type = "button";
+      editButton.textContent = "修改";
+      editButton.addEventListener("click", () => startDrawEditMode(version));
+      actions.append(editButton);
+    }
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
@@ -718,7 +845,7 @@ clearButton.addEventListener("click", () => clearBoard());
 sampleButton.addEventListener("click", () => {
   const added = [];
   const colors = ["#d6202a", "#1768b7", "#14a365", "#f59e0b"];
-  for (let row = 1; row <= rows; row += 1) {
+  for (let row = 1; row <= drawRows; row += 1) {
     const frontOne = ((row * 7) % zones.front.max) + 1;
     const frontTwo = ((row * 13) % zones.front.max) + 1;
     const backOne = ((row * 5) % zones.back.max) + 1;
@@ -738,6 +865,10 @@ sampleButton.addEventListener("click", () => {
 saveHistoryButton.addEventListener("click", () => addHistory("保存记录", collectBalls()));
 saveVersionButton.addEventListener("click", saveVersion);
 generateDrawVersionButton.addEventListener("click", generateDrawVersion);
+cancelEditDrawVersionButton.addEventListener("click", () => {
+  clearDrawEditMode();
+  drawImportMessage.textContent = "已取消修改。";
+});
 
 unlockAppButton.addEventListener("click", () => {
   if (passwordMatches(appPassword.value, pagePasswordValue)) {
@@ -797,11 +928,13 @@ clearHistoryButton.addEventListener("click", () => {
 });
 
 clearVersionsButton.addEventListener("click", () => {
-  versions = [];
+  const removedCount = versions.filter((version) => !isDrawVersion(version)).length;
+  versions = versions.filter(isDrawVersion);
   writeStorage(versionStorageKey, versions);
   renderVersions();
   versionPreviewTitle.textContent = "未选择版本";
   versionPreview.innerHTML = "";
+  versionAuthMessage.textContent = `已清空 ${removedCount} 个普通调整版本，开奖版本已保留。`;
 });
 
 versionSearch.addEventListener("input", renderVersions);
@@ -830,7 +963,9 @@ swatches.forEach((swatch) => {
 });
 
 buildBoard();
+normalizeExistingVersions();
 seedLatestDrawVersion();
+normalizeExistingVersions();
 restoreDraft();
 updateCount();
 renderHistory();

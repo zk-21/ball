@@ -399,6 +399,20 @@ button:active {
   color: #b0c9e5;
 }
 
+.cell[data-pick="true"] {
+  background: #fff8df;
+  color: #b89b43;
+}
+
+.cell[data-pick="true"][data-zone="back"] {
+  background: #edf9f4;
+  color: #62a385;
+}
+
+.cell[data-row="51"] {
+  border-top: 3px solid #d2b04c;
+}
+
 .cell:hover {
   outline: 2px solid #475569;
   outline-offset: -2px;
