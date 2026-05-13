@@ -5,6 +5,7 @@ const toggleAppPasswordButton = document.querySelector("#toggleAppPasswordButton
 const unlockAppButton = document.querySelector("#unlockAppButton");
 const appAuthMessage = document.querySelector("#appAuthMessage");
 const board = document.querySelector("#board");
+const boardWrap = document.querySelector(".board-wrap");
 const frontBoard = document.querySelector("#frontBoard");
 const backBoard = document.querySelector("#backBoard");
 const rowInput = document.querySelector("#rowInput");
@@ -61,6 +62,7 @@ let history = readStorage(historyStorageKey);
 let versions = readStorage(versionStorageKey);
 let versionsUnlocked = sessionStorage.getItem(versionAuthStorageKey) === "true";
 let currentBaseTitle = "";
+let userAdjustedZoom = false;
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -320,6 +322,31 @@ function setColor(color) {
   swatches.forEach((swatch) => {
     swatch.classList.toggle("active", swatch.dataset.color.toLowerCase() === color.toLowerCase());
   });
+}
+
+function getBoardNaturalWidth() {
+  const rootStyle = getComputedStyle(document.documentElement);
+  const boardStyle = getComputedStyle(board);
+  const cellSize = parseFloat(rootStyle.getPropertyValue("--cell")) || 28;
+  const gap = parseFloat(boardStyle.gap) || 14;
+  const paddingLeft = parseFloat(boardStyle.paddingLeft) || 0;
+  const paddingRight = parseFloat(boardStyle.paddingRight) || 0;
+  return (zones.front.max + zones.back.max) * cellSize + gap + paddingLeft + paddingRight;
+}
+
+function setBoardZoom(value) {
+  const zoom = Math.min(Math.max(value, 0.3), 1.3);
+  document.documentElement.style.setProperty("--board-zoom", `${zoom}`);
+  zoomInput.value = Math.round(zoom * 100);
+}
+
+function fitBoardToScreen(force = false) {
+  if (userAdjustedZoom && !force) return;
+  const availableWidth = boardWrap.clientWidth - 2;
+  const naturalWidth = getBoardNaturalWidth();
+  if (availableWidth <= 0 || naturalWidth <= 0) return;
+  const zoom = Math.min(1, Math.max(0.3, availableWidth / naturalWidth));
+  setBoardZoom(zoom);
 }
 
 function buildBoard() {
@@ -790,6 +817,7 @@ sizeInput.addEventListener("input", () => {
 });
 
 zoomInput.addEventListener("input", () => {
+  userAdjustedZoom = true;
   document.documentElement.style.setProperty("--board-zoom", `${zoomInput.value / 100}`);
 });
 
@@ -808,5 +836,6 @@ updateCount();
 renderHistory();
 renderVersions();
 sizeInput.value = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--ball-size"), 10);
-zoomInput.value = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--board-zoom")) * 100;
+fitBoardToScreen(true);
+window.addEventListener("resize", () => fitBoardToScreen());
 if (sessionStorage.getItem(pageAuthStorageKey) === "true") unlockPage();

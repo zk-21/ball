@@ -80,9 +80,35 @@ textarea {
 }
 
 .app {
+  display: flex;
+  flex-direction: column;
   width: min(1440px, 100%);
   margin: 0 auto;
   padding: 18px;
+}
+
+.toolbar {
+  order: 1;
+}
+
+.palette {
+  order: 2;
+}
+
+.board-shell {
+  order: 3;
+}
+
+.version-shell {
+  order: 4;
+}
+
+.draw-import-shell {
+  order: 5;
+}
+
+.history-shell {
+  order: 6;
 }
 
 .toolbar {
@@ -294,7 +320,7 @@ button:active {
 
 .board-wrap {
   overflow: auto;
-  max-height: calc(100vh - 210px);
+  max-height: none;
 }
 
 .board {
@@ -718,8 +744,9 @@ button:active {
 
 @media (max-width: 860px) {
   :root {
-    --cell: 25px;
-    --board-zoom: 0.82;
+    --cell: 20px;
+    --ball-size: 18px;
+    --board-zoom: 0.5;
   }
 
   .toolbar {
@@ -734,7 +761,7 @@ button:active {
   }
 
   .board-wrap {
-    max-height: calc(100vh - 310px);
+    max-height: none;
   }
 
   .board {
@@ -748,8 +775,8 @@ button:active {
 
 @media (max-width: 520px) {
   :root {
-    --cell: 23px;
-    --ball-size: 21px;
+    --cell: 18px;
+    --ball-size: 16px;
   }
 
   .app {
@@ -842,7 +869,7 @@ button:active {
   }
 
   .board-wrap {
-    max-height: calc(100vh - 360px);
+    max-height: none;
   }
 
   .board {
