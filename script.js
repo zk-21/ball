@@ -130,24 +130,31 @@ function getCell(row, zone, number) {
 
 function getBallData(ball) {
   const cell = ball.closest(".cell");
+  const rawColors = ball.dataset.colors;
+  const colors = rawColors ? rawColors.split(",").filter(Boolean).map(normalizeColor) : null;
   return {
     row: Number(cell.dataset.row),
     zone: cell.dataset.zone,
     number: Number(cell.dataset.number),
     label: ball.textContent,
     color: normalizeColor(ball.dataset.color),
+    colors: colors && colors.length > 1 ? colors : null,
   };
 }
 
 function cloneBall(ball) {
   const number = Number(ball.number) || Number(ball.label) || 0;
-  return {
+  const result = {
     row: Number(ball.row) || 0,
     zone: ball.zone,
     number,
     label: String(ball.label || pad(number)),
     color: normalizeColor(ball.color) || "#999999",
   };
+  if (ball.colors && Array.isArray(ball.colors) && ball.colors.length > 1) {
+    result.colors = ball.colors.map(normalizeColor).filter(Boolean);
+  }
+  return result;
 }
 
 function cloneBalls(balls) {
@@ -394,7 +401,7 @@ function updateCount() {
   ballCount.textContent = board.querySelectorAll(".ball").length;
 }
 
-function addBall(row, zone, number, label = numberInput.value, color = colorInput.value, shouldRecord = true) {
+function addBall(row, zone, number, label = numberInput.value, color = colorInput.value, shouldRecord = true, existingColors = null) {
   const cell = getCell(row, zone, number);
   if (!cell) return;
 
@@ -402,20 +409,28 @@ function addBall(row, zone, number, label = numberInput.value, color = colorInpu
   const cleanColor = normalizeColor(color);
   const cleanLabel = String(label || cell.dataset.value).slice(0, 2).padStart(2, "0");
 
+  // 从版本恢复彩虹球（shouldRecord=false 且 existingColors 包含多种颜色）
+  if (!shouldRecord && existingColors && existingColors.length > 1) {
+    const colorsStr = existingColors.join(",");
+    cell.innerHTML = `<span class="ball rainbow-ball" data-color="${cleanColor}" data-colors="${colorsStr}" style="--ball-color:#1f2937;background:#1f2937"><span class="ball-label">${cleanLabel}</span></span>`;
+    updateCount();
+    return;
+  }
+
   // 检查是否已有球，如果有则叠加彩虹效果（黑色）
   if (previous) {
-    const existingColors = previous.dataset.colors
+    const existingColorsArr = previous.dataset.colors
       ? previous.dataset.colors.split(",")
       : [previous.dataset.color];
-    if (!existingColors.includes(cleanColor)) {
-      existingColors.push(cleanColor);
-      const newColors = existingColors.join(",");
+    if (!existingColorsArr.includes(cleanColor)) {
+      existingColorsArr.push(cleanColor);
+      const newColors = existingColorsArr.join(",");
       previous.dataset.colors = newColors;
       previous.style.background = "#1f2937";
       previous.classList.add("rainbow-ball");
       updateCount();
       if (shouldRecord) {
-        addHistory("叠加彩虹球", { row, zone, number, label: cleanLabel, color: newColors });
+        addHistory("叠加彩虹球", { row, zone, number, label: cleanLabel, color: newColors, colors: existingColorsArr });
         persistDraft();
       }
       return;
@@ -485,7 +500,7 @@ function applyBalls(balls, options = {}) {
   if (options.rowIssues) {
     rowIssues = { ...options.rowIssues };
   }
-  cloneBalls(balls).forEach((ball) => addBall(ball.row, ball.zone, ball.number, ball.label, ball.color, false));
+  cloneBalls(balls).forEach((ball) => addBall(ball.row, ball.zone, ball.number, ball.label, ball.color, false, ball.colors));
   updateCount();
   updateRowLabels();
 
