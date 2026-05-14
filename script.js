@@ -305,6 +305,7 @@ function collectBalls() {
 function unlockPage() {
   appRoot.hidden = false;
   appLock.classList.add("is-hidden");
+  appPassword.blur();
   versionsUnlocked = true;
   sessionStorage.setItem(versionAuthStorageKey, "true");
   renderVersions();
@@ -576,6 +577,8 @@ function buildBoard() {
       labelCell.className = "row-label";
       labelCell.dataset.row = row;
       labelCell.dataset.zone = zone;
+      if (row % 5 === 0) labelCell.dataset.groupEnd = "true";
+      if (row > drawRows) labelCell.dataset.pick = "true";
       labelCell.textContent = row;
       labelCell.title = `第${row}行`;
       fragment.append(labelCell);
@@ -590,6 +593,8 @@ function buildBoard() {
         cell.dataset.number = number;
         cell.dataset.value = value;
         if (row > drawRows) cell.dataset.pick = "true";
+        if (row % 5 === 0) cell.dataset.groupEnd = "true";
+        if (zone === "front" && (number === 12 || number === 24)) cell.dataset.frontSplit = "true";
         cell.textContent = value;
         cell.title = `${config.label} 第 ${row} 行，${value} 号`;
         fragment.append(cell);
@@ -1272,6 +1277,7 @@ unlockVersionsButton.addEventListener("click", () => {
     versionsUnlocked = true;
     sessionStorage.setItem(versionAuthStorageKey, "true");
     versionPassword.value = "";
+    versionPassword.blur();
     renderVersions();
     return;
   }

@@ -4,8 +4,8 @@
   --ink: #172033;
   --muted: #6b7280;
   --line: #d8deea;
-  --red-soft: #fff1f0;
-  --blue-soft: #eef6ff;
+  --red-soft: #fff7f7;
+  --blue-soft: #f6fbff;
   --cell: 28px;
   --ball-size: 25px;
   --board-zoom: 1;
@@ -364,8 +364,8 @@ button:active {
 }
 
 .zone-title {
-  position: sticky;
-  top: 0;
+  position: static;
+  top: auto;
   z-index: 5;
   display: grid;
   grid-template-columns: var(--row-label-w) 1fr;
@@ -449,17 +449,41 @@ button:active {
 }
 
 .cell[data-pick="true"] {
-  background: #fff8df;
-  color: #b89b43;
+  background: #fffdf3;
+  color: #c6b27a;
 }
 
 .cell[data-pick="true"][data-zone="back"] {
-  background: #edf9f4;
-  color: #62a385;
+  background: #f4fbf8;
+  color: #8ab9a5;
 }
 
 .cell[data-row="51"] {
-  border-top: 3px solid #d2b04c;
+  border-top: 3px solid #d8b94f;
+}
+
+.cell[data-front-split="true"] {
+  border-right: 3px solid #e3a1a1;
+  box-shadow: 2px 0 0 rgba(227, 161, 161, 0.35);
+}
+
+.cell[data-group-end="true"],
+.row-label[data-group-end="true"] {
+  border-bottom: 3px solid #cbd5e1;
+}
+
+.row-label[data-pick="true"] {
+  background: #fffdf3;
+  color: #9f8d60;
+}
+
+.row-label[data-zone="back"][data-pick="true"] {
+  background: #f4fbf8;
+  color: #7aa995;
+}
+
+.row-label[data-row="51"] {
+  border-top: 3px solid #d8b94f;
 }
 
 /* ---- 行号标签 ---- */
