@@ -9,6 +9,7 @@
   --cell: 28px;
   --ball-size: 25px;
   --board-zoom: 1;
+  --row-label-w: 92px;
 }
 
 * {
@@ -171,6 +172,34 @@ p {
   flex-basis: 100%;
   color: var(--muted);
   font-size: 12px;
+}
+
+.version-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, #f0f4ff, #e8f0fe);
+  border: 1px solid #b3c5f0;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.version-banner-label {
+  background: #2563eb;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  letter-spacing: 1px;
+}
+
+.version-banner-text {
+  color: #1e3a8a;
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .controls {
@@ -339,7 +368,8 @@ button:active {
   top: 0;
   z-index: 5;
   display: grid;
-  place-items: center;
+  grid-template-columns: var(--row-label-w) 1fr;
+  align-items: center;
   height: 32px;
   border: 1px solid var(--line);
   border-bottom: 0;
@@ -347,9 +377,28 @@ button:active {
   background: #fff;
 }
 
+.zone-title::before {
+  content: "行号";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--row-label-w);
+  height: 100%;
+  font-size: 11px;
+  color: var(--muted);
+  border-right: 1px solid #d0d9e8;
+  flex-shrink: 0;
+}
+
 .front-title {
   color: #b91c1c;
   background: #fff5f4;
+}
+
+.front-title::before {
+  content: "期号/行号";
+  font-size: 10px;
+  letter-spacing: 0.5px;
 }
 
 .back-title {
@@ -364,11 +413,11 @@ button:active {
 }
 
 .front-board {
-  grid-template-columns: repeat(35, var(--cell));
+  grid-template-columns: var(--row-label-w) repeat(35, var(--cell));
 }
 
 .back-board {
-  grid-template-columns: repeat(12, var(--cell));
+  grid-template-columns: 50px repeat(12, var(--cell));
 }
 
 .cell {
@@ -413,6 +462,136 @@ button:active {
   border-top: 3px solid #d2b04c;
 }
 
+/* ---- 行号标签 ---- */
+.row-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: var(--row-label-w);
+  height: var(--cell);
+  border-right: 1px solid #d0d9e8;
+  border-bottom: 1px solid #d0d9e8;
+  background: #f4f6fa;
+  font-size: 9px;
+  line-height: 1;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+  padding: 0 3px;
+  white-space: nowrap;
+}
+
+.row-label-issue {
+  font-size: 9px;
+  font-weight: 700;
+  color: #374151;
+  flex-shrink: 0;
+}
+
+[data-zone="front"] .row-label-num {
+  font-size: 9px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+[data-zone="back"] .row-label {
+  font-size: 10px;
+  color: var(--muted);
+  width: 50px;
+  flex-shrink: 0;
+}
+
+/* ---- 擦除模式 ---- */
+.board.erase-mode {
+  cursor: not-allowed;
+}
+
+.board.erase-mode .cell {
+  cursor: crosshair;
+}
+
+.board.erase-mode .cell:not(:hover) .ball {
+  opacity: 0.45;
+  transition: opacity 0.12s ease;
+}
+
+.board.erase-mode .cell:hover {
+  outline: 3px solid #b91c1c;
+  outline-offset: -3px;
+}
+
+.board.erase-mode .cell:hover .ball {
+  opacity: 1;
+}
+
+/* ---- 文字描述添加 ---- */
+.text-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.text-add-wrapper {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.text-add textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  background: #fff;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.text-add button {
+  flex-shrink: 0;
+}
+
+.help-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: #f3f4f6;
+  color: #6b7280;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.help-btn:hover {
+  background: #e5e7eb;
+  color: var(--ink);
+}
+
+.desc-help-tip {
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #92400e;
+}
+
+.desc-help-tip code {
+  background: #fef3c7;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
 .cell:hover {
   outline: 2px solid #475569;
   outline-offset: -2px;
@@ -440,6 +619,11 @@ button:active {
     inset 0 2px 4px rgba(255, 255, 255, 0.35),
     inset 0 -4px 6px rgba(0, 0, 0, 0.22),
     0 2px 3px rgba(31, 41, 55, 0.18);
+}
+
+/* 彩虹球效果 - 同一位置多种颜色叠加 */
+.ball.rainbow-ball {
+  background: #1f2937 !important;
 }
 
 .history-shell,
@@ -761,6 +945,7 @@ button:active {
     --cell: 20px;
     --ball-size: 18px;
     --board-zoom: 0.5;
+    --row-label-w: 60px;
   }
 
   .toolbar {
@@ -785,12 +970,27 @@ button:active {
   .version-layout {
     grid-template-columns: 1fr;
   }
+
+  .row-label {
+    font-size: 7px;
+    gap: 1px;
+    padding: 0 2px;
+  }
+
+  .row-label-issue {
+    font-size: 7px;
+  }
+
+  .row-label-num {
+    font-size: 8px;
+  }
 }
 
 @media (max-width: 520px) {
   :root {
     --cell: 18px;
     --ball-size: 16px;
+    --row-label-w: 50px;
   }
 
   .app {
@@ -823,6 +1023,34 @@ button:active {
   input[type="color"],
   input[type="range"] {
     width: 100%;
+  }
+
+  .text-add {
+    flex-direction: column;
+  }
+
+  .text-add-wrapper {
+    flex-direction: column;
+  }
+
+  .text-add textarea,
+  .text-add button,
+  .help-btn {
+    width: 100%;
+  }
+
+  .row-label {
+    font-size: 6px;
+    gap: 1px;
+    padding: 0 1px;
+  }
+
+  .row-label-issue {
+    font-size: 6px;
+  }
+
+  .row-label-num {
+    font-size: 7px;
   }
 
   .palette {

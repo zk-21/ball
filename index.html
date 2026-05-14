@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>选号模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260513-10" />
+    <link rel="stylesheet" href="styles.css?v=20260514-5" />
   </head>
   <body>
     <section id="appLock" class="app-lock">
@@ -63,6 +63,27 @@
           <button id="eraseButton" type="button" aria-pressed="false">擦除</button>
           <button id="deleteColorButton" type="button">删此颜色</button>
           <button id="clearButton" type="button">清空</button>
+        </div>
+        <div class="text-add">
+          <div class="text-add-wrapper">
+            <textarea id="descInput" rows="3" placeholder="如：前区1行4,10,15红球（逗号分隔多号），或粘贴Markdown表格批量添加"></textarea>
+            <button id="descAddButton" type="button">按描述添加</button>
+            <button id="descHelpButton" type="button" class="help-btn" title="查看语法规则">?</button>
+          </div>
+          <div id="descHelpTip" class="desc-help-tip" hidden>
+            <strong>语法规则：</strong><br/>
+            <code>前区/后区</code> + <code>行号</code> + <code>号码</code> + <code>颜色</code><br/><br/>
+            <strong>单条示例：</strong><br/>
+            • <code>前区1行4,10,15红球</code> — 前区第1行添加3个红球<br/>
+            • <code>后区3行2篮球</code> — 后区第3行添加蓝球02<br/>
+            • <code>前区第5行03号红</code> — 前区第5行添加红球03<br/><br/>
+            <strong>表格批量导入（先选颜色）：</strong><br/>
+            <code>| 顺序 | 前区号码 | 后区号码 |</code><br/>
+            <code>| 1 | 12 17 20 26 35 | 04 09 |</code><br/>
+            <code>| 2 | 04 10 15 22 27 | 06 10 |</code><br/><br/>
+            <strong>彩虹球：</strong>同位置多颜色显示<span style="background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f);-webkit-background-clip:text;color:transparent;font-weight:bold">彩虹</span><br/><br/>
+            <strong>支持：</strong>中文数字、多行/分号分隔
+          </div>
         </div>
       </section>
 
@@ -128,6 +149,10 @@
           </div>
           <span id="currentBaseLabel" class="base-label">当前编辑：空白画面</span>
         </div>
+        <div id="versionBanner" class="version-banner" hidden>
+          <span class="version-banner-label">版本</span>
+          <span id="versionBannerText" class="version-banner-text"></span>
+        </div>
         <div class="board-wrap">
           <div id="board" class="board" aria-label="选号走势表">
             <div>
@@ -161,6 +186,6 @@
       </div>
     </main>
 
-    <script src="script.js?v=20260513-10"></script>
+    <script src="script.js?v=20260514-10"></script>
   </body>
 </html>
