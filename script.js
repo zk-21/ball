@@ -1045,9 +1045,12 @@ function handleDescAdd() {
   const text = descInput.value.trim();
   if (!text) return;
 
-  // 检测是否为 Markdown 表格格式
   const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length === 0) return;
+
+  // 检测格式
   const isMarkdownTable = lines.some(line => line.match(/^\|\s*\d+\s*\|/));
+  const isTabSeparated = lines.some(line => line.includes('\t'));
 
   let addedCount = 0;
 
@@ -1055,7 +1058,6 @@ function handleDescAdd() {
     // 解析 Markdown 表格格式
     const currentColor = colorInput.value;
     for (const line of lines) {
-      // 匹配数据行: | 1 | 12 17 20 26 35 | 04 09 |
       const match = line.match(/^\|\s*(\d+)\s*\|\s*([\d\s]+)\s*\|\s*([\d\s]+)\s*\|/);
       if (!match) continue;
 
@@ -1073,7 +1075,6 @@ function handleDescAdd() {
               addBall(row, "front", num, pad(num), currentColor, false);
               addedCount++;
             } else {
-              // 已有球，叠加颜色（变成彩虹黑色）
               addBall(row, "front", num, pad(num), currentColor, false);
             }
           }
@@ -1087,8 +1088,52 @@ function handleDescAdd() {
               addBall(row, "back", num, pad(num), currentColor, false);
               addedCount++;
             } else {
-              // 已有球，叠加颜色（变成彩虹黑色）
               addBall(row, "back", num, pad(num), currentColor, false);
+            }
+          }
+        }
+      }
+    }
+  } else if (isTabSeparated) {
+    // 支持制表符分隔格式（如从Excel复制的数据）
+    const currentColor = colorInput.value;
+    for (const line of lines) {
+      const parts = line.split('\t').map(p => p.trim()).filter(Boolean);
+      // 跳过表头
+      if (parts[0] === '序号' || parts[0] === '顺序' || isNaN(parseInt(parts[0], 10))) continue;
+
+      if (parts.length >= 3) {
+        const row = parseInt(parts[0], 10);
+        if (row < 1 || row > rows) continue;
+
+        const frontNums = parts[1].split(/\s+/).map(Number).filter(n => n > 0 && n <= 35);
+        const backNums = parts[2].split(/\s+/).map(Number).filter(n => n > 0 && n <= 12);
+
+        if (frontNums.length === 5 && backNums.length === 2) {
+          // 添加前区号码
+          for (const num of frontNums) {
+            const cell = getCell(row, "front", num);
+            if (cell) {
+              const existing = cell.querySelector(".ball");
+              if (!existing) {
+                addBall(row, "front", num, pad(num), currentColor, false);
+                addedCount++;
+              } else {
+                addBall(row, "front", num, pad(num), currentColor, false);
+              }
+            }
+          }
+          // 添加后区号码
+          for (const num of backNums) {
+            const cell = getCell(row, "back", num);
+            if (cell) {
+              const existing = cell.querySelector(".ball");
+              if (!existing) {
+                addBall(row, "back", num, pad(num), currentColor, false);
+                addedCount++;
+              } else {
+                addBall(row, "back", num, pad(num), currentColor, false);
+              }
             }
           }
         }
