@@ -500,6 +500,8 @@ button:active {
   color: var(--muted);
   width: 50px;
   flex-shrink: 0;
+  white-space: nowrap;
+  overflow: visible;
 }
 
 /* ---- 擦除模式 ---- */
