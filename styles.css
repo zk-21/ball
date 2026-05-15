@@ -583,6 +583,10 @@ button:active {
   flex-shrink: 0;
 }
 
+.text-file-import {
+  flex-shrink: 0;
+}
+
 .help-btn {
   width: 28px;
   height: 28px;
@@ -675,6 +679,48 @@ button:active {
 .history-top h2 {
   margin: 0;
   font-size: 16px;
+}
+
+.draw-version-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.file-import-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 92px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #b9d3ee;
+  border-radius: 6px;
+  color: #1768b7;
+  background: #f4f9ff;
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.file-import-button:hover {
+  border-color: #8da0ba;
+  box-shadow: 0 5px 14px rgba(31, 41, 55, 0.1);
+}
+
+.file-import-button input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .version-tools {
@@ -1061,6 +1107,7 @@ button:active {
 
   .text-add textarea,
   .text-add button,
+  .text-file-import,
   .help-btn {
     width: 100%;
   }
@@ -1094,12 +1141,19 @@ button:active {
     flex-direction: column;
   }
 
+  .draw-version-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
   .board-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .board-actions button,
+  .draw-version-actions button,
+  .file-import-button,
   .history-top button,
   .version-tools input {
     width: 100%;

@@ -38,6 +38,7 @@ const versionPreview = document.querySelector("#versionPreview");
 const versionPreviewTitle = document.querySelector("#versionPreviewTitle");
 const drawDateInput = document.querySelector("#drawDateInput");
 const drawDataInput = document.querySelector("#drawDataInput");
+const drawFileInput = document.querySelector("#drawFileInput");
 const generateDrawVersionButton = document.querySelector("#generateDrawVersionButton");
 const cancelEditDrawVersionButton = document.querySelector("#cancelEditDrawVersionButton");
 const drawImportMessage = document.querySelector("#drawImportMessage");
@@ -46,13 +47,14 @@ const versionModalTitle = document.querySelector("#versionModalTitle");
 const versionModalBody = document.querySelector("#versionModalBody");
 const closeVersionModalButton = document.querySelector("#closeVersionModalButton");
 const descInput = document.querySelector("#descInput");
+const descFileInput = document.querySelector("#descFileInput");
 const descAddButton = document.querySelector("#descAddButton");
 const descHelpButton = document.querySelector("#descHelpButton");
 const descHelpTip = document.querySelector("#descHelpTip");
 const swatches = [...document.querySelectorAll(".swatch")];
 
-const drawRows = 50;
-const extraPickRows = 5;
+const drawRows = 35;
+const extraPickRows = 0;
 const rows = drawRows + extraPickRows;
 const pagePasswordValue = "zk@001";
 const versionPasswordValue = "zk@001";
@@ -73,7 +75,7 @@ let versionsUnlocked = sessionStorage.getItem(versionAuthStorageKey) === "true";
 let currentBaseTitle = "";
 let userAdjustedZoom = false;
 let editingDrawVersionId = "";
-let rowIssues = {}; // { rowNumber: issueNumber }
+let rowIssues = {};
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -130,31 +132,24 @@ function getCell(row, zone, number) {
 
 function getBallData(ball) {
   const cell = ball.closest(".cell");
-  const rawColors = ball.dataset.colors;
-  const colors = rawColors ? rawColors.split(",").filter(Boolean).map(normalizeColor) : null;
   return {
     row: Number(cell.dataset.row),
     zone: cell.dataset.zone,
     number: Number(cell.dataset.number),
     label: ball.textContent,
     color: normalizeColor(ball.dataset.color),
-    colors: colors && colors.length > 1 ? colors : null,
   };
 }
 
 function cloneBall(ball) {
   const number = Number(ball.number) || Number(ball.label) || 0;
-  const result = {
+  return {
     row: Number(ball.row) || 0,
     zone: ball.zone,
     number,
     label: String(ball.label || pad(number)),
     color: normalizeColor(ball.color) || "#999999",
   };
-  if (ball.colors && Array.isArray(ball.colors) && ball.colors.length > 1) {
-    result.colors = ball.colors.map(normalizeColor).filter(Boolean);
-  }
-  return result;
 }
 
 function cloneBalls(balls) {
@@ -166,78 +161,40 @@ function makeBall(row, zone, number, color) {
 }
 
 function parseBallDescription(text) {
-  // 中文数字转阿拉伯数字
-  const cnToNum = (str) => {
-    const cnMap = { "零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9, "十": 10 };
-    str = str.replace(/零/g, "0").replace(/一/g, "1").replace(/二/g, "2").replace(/三/g, "3").replace(/四/g, "4").replace(/五/g, "5").replace(/六/g, "6").replace(/七/g, "7").replace(/八/g, "8").replace(/九/g, "9").replace(/十/g, "10");
-    return Number(str) || 0;
-  };
-
-  // 颜色映射
-  const colorMap = {
-    "红": "#d6202a", "红色": "#d6202a", "红球": "#d6202a",
-    "蓝": "#1768b7", "蓝色": "#1768b7", "蓝球": "#1768b7",
-    "绿": "#14a365", "绿色": "#14a365", "绿球": "#14a365",
-    "橙": "#f59e0b", "橙色": "#f59e0b", "橙球": "#f59e0b", "橙色球": "#f59e0b",
-    "紫": "#7c3aed", "紫色": "#7c3aed", "紫球": "#7c3aed",
-    "黑": "#111827", "黑色": "#111827", "黑球": "#111827",
-  };
-
   const normalized = String(text || "").replace(/\s+/g, "");
+  const zone = normalized.includes("后区") ? "back" : normalized.includes("前区") ? "front" : "";
+  if (!zone) return null;
 
-  // 识别区：前区 / 后区
-  let zone = "front";
-  if (/后区/.test(normalized)) zone = "back";
-  else if (/前区/.test(normalized)) zone = "front";
-  else return null; // 必须指定区
+  const colorMap = {
+    红: "#d6202a",
+    蓝: "#1768b7",
+    绿: "#14a365",
+    橙: "#f59e0b",
+    紫: "#7c3aed",
+    黑: "#111827",
+  };
+  const colorKey = Object.keys(colorMap).find((key) => normalized.includes(key));
+  const color = colorKey ? colorMap[colorKey] : colorInput.value;
 
-  // 识别行号（支持直接行号或期号映射）
-  let row = 1;
-
-  // 优先匹配 "第X行" 或 "X行" 作为直接行号
-  const rowMatch = normalized.match(/(?:第)?([零一二三四五六七八九十\d]{1,2})行/);
-  if (rowMatch) {
-    row = clamp(cnToNum(rowMatch[1]), 1, rows);
-  } else {
-    // 没有直接行号，尝试匹配期号（如 2026051）映射为行号
-    const issueMatch = normalized.match(/\b(20\d{5})\b/);
-    if (issueMatch) {
-      const issue = issueMatch[1];
-      const foundRow = Object.entries(rowIssues).find(([, val]) => val === issue);
-      if (foundRow) {
-        row = Number(foundRow[0]);
-      } else {
-        // 期号不在当前 rowIssues 中，从末尾取 1-2 位作为行号
-        const fallback = issue.match(/(\d{1,2})$/);
-        if (fallback) row = clamp(Number(fallback[1]), 1, rows);
-      }
-    } else {
-      return null; // 必须指定行号或期号
-    }
+  const issueMatch = normalized.match(/\b(20?\d{5})\b/);
+  const rowMatch = normalized.match(/(\d{1,2})行/);
+  let row = rowMatch ? Number(rowMatch[1]) : 0;
+  if (!row && issueMatch) {
+    const issue = normalizeIssue(issueMatch[1]);
+    const found = Object.entries(rowIssues).find(([, value]) => normalizeIssue(value) === issue);
+    row = found ? Number(found[0]) : 0;
   }
+  if (!row) return null;
 
-  // 识别颜色
-  let color = colorInput.value;
-  for (const [key, value] of Object.entries(colorMap)) {
-    if (normalized.includes(key)) {
-      color = value;
-      break;
-    }
-  }
-
-  // 识别号码（支持逗号分隔的多个号码）
-  // 匹配 "04,10,15,22,27" 或 "4,10,15,22,27" 格式
-  const numStrMatch = normalized.match(/[\d,，]+(?=[红蓝绿橙紫黑])/);
-  if (numStrMatch) {
-    const nums = numStrMatch[0].split(/[,，]/).map(n => cnToNum(n.trim())).filter(n => n > 0);
-    return { row, zone, numbers: nums, color };
-  }
-
-  // 单个号码
-  const numMatch = normalized.match(/(?:第?)?([零一二三四五六七八九十\d]{1,2})(?:[号个])/);
-  const number = numMatch ? clamp(cnToNum(numMatch[1]), 1, zones[zone].max) : clamp(Number(numberInput.value), 1, zones[zone].max);
-
-  return { row, zone, number, color };
+  const numberPart = normalized
+    .replace(/20?\d{5}/g, "")
+    .replace(/\d{1,2}行/g, "")
+    .replace(/[前后]区/g, "")
+    .replace(/[红蓝绿橙紫黑]色?球?/g, "");
+  const numbers = (numberPart.match(/\d{1,2}/g) || [])
+    .map(Number)
+    .filter((number) => number >= 1 && number <= zones[zone].max);
+  return numbers.length > 0 ? { row: clamp(row, 1, rows), zone, numbers, color } : null;
 }
 
 function isDrawVersion(version) {
@@ -305,7 +262,6 @@ function collectBalls() {
 function unlockPage() {
   appRoot.hidden = false;
   appLock.classList.add("is-hidden");
-  appPassword.blur();
   versionsUnlocked = true;
   sessionStorage.setItem(versionAuthStorageKey, "true");
   renderVersions();
@@ -318,12 +274,9 @@ function updateBaseLabel() {
 }
 
 function updateVersionBanner() {
-  if (currentBaseTitle) {
-    versionBanner.hidden = false;
-    versionBannerText.textContent = currentBaseTitle;
-  } else {
-    versionBanner.hidden = true;
-  }
+  if (!versionBanner || !versionBannerText) return;
+  versionBanner.hidden = !currentBaseTitle;
+  versionBannerText.textContent = currentBaseTitle;
 }
 
 function persistDraft() {
@@ -402,43 +355,14 @@ function updateCount() {
   ballCount.textContent = board.querySelectorAll(".ball").length;
 }
 
-function addBall(row, zone, number, label = numberInput.value, color = colorInput.value, shouldRecord = true, existingColors = null) {
+function addBall(row, zone, number, label = numberInput.value, color = colorInput.value, shouldRecord = true) {
   const cell = getCell(row, zone, number);
   if (!cell) return;
 
   const previous = cell.querySelector(".ball");
   const cleanColor = normalizeColor(color);
   const cleanLabel = String(label || cell.dataset.value).slice(0, 2).padStart(2, "0");
-
-  // 从版本恢复彩虹球（shouldRecord=false 且 existingColors 包含多种颜色）
-  if (!shouldRecord && existingColors && existingColors.length > 1) {
-    const colorsStr = existingColors.join(",");
-    cell.innerHTML = `<span class="ball rainbow-ball" data-color="${cleanColor}" data-colors="${colorsStr}" style="--ball-color:#1f2937;background:#1f2937"><span class="ball-label">${cleanLabel}</span></span>`;
-    updateCount();
-    return;
-  }
-
-  // 检查是否已有球，如果有则叠加彩虹效果（黑色）
-  if (previous) {
-    const existingColorsArr = previous.dataset.colors
-      ? previous.dataset.colors.split(",")
-      : [previous.dataset.color];
-    if (!existingColorsArr.includes(cleanColor)) {
-      existingColorsArr.push(cleanColor);
-      const newColors = existingColorsArr.join(",");
-      previous.dataset.colors = newColors;
-      previous.style.background = "#1f2937";
-      previous.classList.add("rainbow-ball");
-      updateCount();
-      if (shouldRecord) {
-        addHistory("叠加彩虹球", { row, zone, number, label: cleanLabel, color: newColors, colors: existingColorsArr });
-        persistDraft();
-      }
-      return;
-    }
-  }
-
-  cell.innerHTML = `<span class="ball" data-color="${cleanColor}" style="--ball-color:${cleanColor}"><span class="ball-label">${cleanLabel}</span></span>`;
+  cell.innerHTML = `<span class="ball" data-color="${cleanColor}" style="--ball-color:${cleanColor}">${cleanLabel}</span>`;
   updateCount();
 
   if (shouldRecord) {
@@ -482,14 +406,10 @@ function updateRowLabels() {
   board.querySelectorAll(".row-label").forEach((label) => {
     const row = Number(label.dataset.row);
     const issue = rowIssues[row];
-    const zone = label.dataset.zone;
-    if (zone === "front" && issue) {
-      // 前区：水平显示 "期号 行号"（去掉 "20" 前缀显示 5 位）
-      const shortIssue = issue.replace(/^20(\d{5})$/, "$1");
-      label.innerHTML = `<span class="row-label-issue">${shortIssue}</span><span class="row-label-num">${row}</span>`;
-      label.title = `${shortIssue}期 第${row}行`;
+    if (label.dataset.zone === "front" && issue) {
+      label.innerHTML = `<span class="row-label-issue">${String(issue).replace(/^20(\d{5})$/, "$1")}</span><span class="row-label-num">${row}</span>`;
+      label.title = `${issue}期 第${row}行`;
     } else {
-      // 后区或无极号：只显示行号
       label.innerHTML = `<span class="row-label-num">${row}</span>`;
       label.title = `第${row}行`;
     }
@@ -498,10 +418,8 @@ function updateRowLabels() {
 
 function applyBalls(balls, options = {}) {
   clearBoard(false);
-  if (options.rowIssues) {
-    rowIssues = { ...options.rowIssues };
-  }
-  cloneBalls(balls).forEach((ball) => addBall(ball.row, ball.zone, ball.number, ball.label, ball.color, false, ball.colors));
+  if (options.rowIssues) rowIssues = { ...options.rowIssues };
+  cloneBalls(balls).forEach((ball) => addBall(ball.row, ball.zone, ball.number, ball.label, ball.color, false));
   updateCount();
   updateRowLabels();
 
@@ -572,7 +490,6 @@ function buildBoard() {
   Object.entries(zones).forEach(([zone, config]) => {
     const fragment = document.createDocumentFragment();
     for (let row = 1; row <= rows; row += 1) {
-      // Row number label
       const labelCell = document.createElement("div");
       labelCell.className = "row-label";
       labelCell.dataset.row = row;
@@ -608,66 +525,66 @@ function createBuiltInDrawBalls() {
   const red = "#d6202a";
   const blue = "#1768b7";
   const draws = [
-    { issue: "26051", date: "2026-05-11", front: [13, 18, 28, 32, 33], back: [2, 11] },
-    { issue: "26050", date: "2026-05-09", front: [6, 10, 14, 23, 33], back: [8, 10] },
-    { issue: "26049", date: "2026-05-06", front: [1, 6, 14, 15, 17], back: [2, 3] },
-    { issue: "26048", date: "2026-05-04", front: [11, 17, 20, 23, 35], back: [1, 10] },
-    { issue: "26047", date: "2026-05-02", front: [9, 20, 21, 23, 28], back: [6, 11] },
-    { issue: "26046", date: "2026-04-29", front: [1, 13, 18, 27, 33], back: [4, 7] },
-    { issue: "26045", date: "2026-04-27", front: [1, 15, 21, 26, 33], back: [4, 7] },
-    { issue: "26044", date: "2026-04-25", front: [3, 8, 22, 26, 29], back: [7, 10] },
-    { issue: "26043", date: "2026-04-22", front: [8, 12, 14, 19, 22], back: [11, 12] },
-    { issue: "26042", date: "2026-04-20", front: [2, 7, 13, 19, 24], back: [3, 8] },
-    { issue: "26041", date: "2026-04-18", front: [24, 25, 27, 29, 34], back: [2, 6] },
-    { issue: "26040", date: "2026-04-15", front: [6, 12, 13, 21, 34], back: [8, 9] },
-    { issue: "26039", date: "2026-04-13", front: [9, 11, 20, 26, 27], back: [6, 9] },
-    { issue: "26038", date: "2026-04-11", front: [8, 17, 21, 33, 35], back: [6, 7] },
-    { issue: "26037", date: "2026-04-08", front: [7, 12, 13, 28, 32], back: [6, 8] },
-    { issue: "26036", date: "2026-04-06", front: [4, 7, 16, 26, 32], back: [5, 8] },
-    { issue: "26035", date: "2026-04-04", front: [2, 22, 30, 33, 34], back: [8, 12] },
-    { issue: "26034", date: "2026-04-01", front: [11, 12, 25, 26, 27], back: [8, 11] },
-    { issue: "26033", date: "2026-03-30", front: [3, 5, 7, 9, 18], back: [2, 10] },
-    { issue: "26032", date: "2026-03-28", front: [3, 4, 19, 26, 32], back: [1, 12] },
-    { issue: "26031", date: "2026-03-25", front: [6, 8, 22, 29, 34], back: [5, 7] },
-    { issue: "26030", date: "2026-03-23", front: [2, 13, 22, 28, 34], back: [5, 12] },
-    { issue: "26029", date: "2026-03-21", front: [3, 5, 17, 33, 35], back: [5, 7] },
-    { issue: "26028", date: "2026-03-18", front: [15, 27, 29, 30, 34], back: [1, 10] },
-    { issue: "26027", date: "2026-03-16", front: [9, 10, 11, 12, 16], back: [1, 11] },
-    { issue: "26026", date: "2026-03-14", front: [10, 11, 22, 26, 32], back: [1, 8] },
-    { issue: "26025", date: "2026-03-11", front: [3, 15, 24, 28, 29], back: [3, 7] },
-    { issue: "26024", date: "2026-03-09", front: [2, 4, 8, 10, 21], back: [9, 12] },
-    { issue: "26023", date: "2026-03-07", front: [9, 25, 26, 27, 28], back: [1, 8] },
-    { issue: "26022", date: "2026-03-04", front: [5, 9, 10, 18, 26], back: [5, 6] },
-    { issue: "26021", date: "2026-03-02", front: [5, 8, 12, 14, 17], back: [4, 5] },
-    { issue: "26020", date: "2026-02-28", front: [1, 10, 21, 23, 29], back: [10, 12] },
-    { issue: "26019", date: "2026-02-25", front: [12, 13, 14, 16, 31], back: [4, 12] },
-    { issue: "26018", date: "2026-02-23", front: [9, 11, 19, 30, 35], back: [1, 12] },
-    { issue: "26017", date: "2026-02-21", front: [4, 5, 10, 23, 31], back: [7, 12] },
-    { issue: "26016", date: "2026-02-18", front: [8, 9, 12, 19, 24], back: [1, 6] },
-    { issue: "26015", date: "2026-02-16", front: [1, 4, 10, 13, 17], back: [3, 11] },
-    { issue: "26014", date: "2026-02-14", front: [16, 18, 23, 34, 35], back: [1, 6] },
-    { issue: "26013", date: "2026-02-11", front: [3, 5, 6, 23, 26], back: [1, 4] },
-    { issue: "26012", date: "2026-02-09", front: [1, 2, 9, 22, 25], back: [1, 6] },
-    { issue: "26011", date: "2026-02-07", front: [14, 21, 23, 29, 33], back: [2, 10] },
-    { issue: "26010", date: "2026-02-04", front: [2, 3, 13, 18, 26], back: [2, 9] },
-    { issue: "26009", date: "2026-02-02", front: [5, 12, 13, 14, 33], back: [5, 8] },
-    { issue: "26008", date: "2026-01-31", front: [3, 6, 17, 21, 33], back: [5, 11] },
-    { issue: "26007", date: "2026-01-28", front: [1, 3, 13, 20, 26], back: [3, 10] },
-    { issue: "26006", date: "2026-01-26", front: [5, 12, 18, 23, 35], back: [6, 12] },
-    { issue: "26005", date: "2026-01-24", front: [2, 4, 16, 23, 35], back: [6, 11] },
-    { issue: "26004", date: "2026-01-21", front: [5, 18, 23, 25, 32], back: [5, 9] },
-    { issue: "26003", date: "2026-01-19", front: [2, 9, 11, 15, 16], back: [2, 4] },
-    { issue: "26002", date: "2026-01-17", front: [4, 8, 15, 20, 31], back: [7, 8] },
+    { issue: "2026051", date: "2026-05-11", front: [13, 18, 28, 32, 33], back: [2, 11] },
+    { issue: "2026050", date: "2026-05-09", front: [6, 10, 14, 23, 33], back: [8, 10] },
+    { issue: "2026049", date: "2026-05-06", front: [1, 6, 14, 15, 17], back: [2, 3] },
+    { issue: "2026048", date: "2026-05-04", front: [11, 17, 20, 23, 35], back: [1, 10] },
+    { issue: "2026047", date: "2026-05-02", front: [9, 20, 21, 23, 28], back: [6, 11] },
+    { issue: "2026046", date: "2026-04-29", front: [1, 13, 18, 27, 33], back: [4, 7] },
+    { issue: "2026045", date: "2026-04-27", front: [1, 15, 21, 26, 33], back: [4, 7] },
+    { issue: "2026044", date: "2026-04-25", front: [3, 8, 22, 26, 29], back: [7, 10] },
+    { issue: "2026043", date: "2026-04-22", front: [8, 12, 14, 19, 22], back: [11, 12] },
+    { issue: "2026042", date: "2026-04-20", front: [2, 7, 13, 19, 24], back: [3, 8] },
+    { issue: "2026041", date: "2026-04-18", front: [24, 25, 27, 29, 34], back: [2, 6] },
+    { issue: "2026040", date: "2026-04-15", front: [6, 12, 13, 21, 34], back: [8, 9] },
+    { issue: "2026039", date: "2026-04-13", front: [9, 11, 20, 26, 27], back: [6, 9] },
+    { issue: "2026038", date: "2026-04-11", front: [8, 17, 21, 33, 35], back: [6, 7] },
+    { issue: "2026037", date: "2026-04-08", front: [7, 12, 13, 28, 32], back: [6, 8] },
+    { issue: "2026036", date: "2026-04-06", front: [4, 7, 16, 26, 32], back: [5, 8] },
+    { issue: "2026035", date: "2026-04-04", front: [2, 22, 30, 33, 34], back: [8, 12] },
+    { issue: "2026034", date: "2026-04-01", front: [11, 12, 25, 26, 27], back: [8, 11] },
+    { issue: "2026033", date: "2026-03-30", front: [3, 5, 7, 9, 18], back: [2, 10] },
+    { issue: "2026032", date: "2026-03-28", front: [3, 4, 19, 26, 32], back: [1, 12] },
+    { issue: "2026031", date: "2026-03-25", front: [6, 8, 22, 29, 34], back: [5, 7] },
+    { issue: "2026030", date: "2026-03-23", front: [2, 13, 22, 28, 34], back: [5, 12] },
+    { issue: "2026029", date: "2026-03-21", front: [3, 5, 17, 33, 35], back: [5, 7] },
+    { issue: "2026028", date: "2026-03-18", front: [15, 27, 29, 30, 34], back: [1, 10] },
+    { issue: "2026027", date: "2026-03-16", front: [9, 10, 11, 12, 16], back: [1, 11] },
+    { issue: "2026026", date: "2026-03-14", front: [10, 11, 22, 26, 32], back: [1, 8] },
+    { issue: "2026025", date: "2026-03-11", front: [3, 15, 24, 28, 29], back: [3, 7] },
+    { issue: "2026024", date: "2026-03-09", front: [2, 4, 8, 10, 21], back: [9, 12] },
+    { issue: "2026023", date: "2026-03-07", front: [9, 25, 26, 27, 28], back: [1, 8] },
+    { issue: "2026022", date: "2026-03-04", front: [5, 9, 10, 18, 26], back: [5, 6] },
+    { issue: "2026021", date: "2026-03-02", front: [5, 8, 12, 14, 17], back: [4, 5] },
+    { issue: "2026020", date: "2026-02-28", front: [1, 10, 21, 23, 29], back: [10, 12] },
+    { issue: "2026019", date: "2026-02-25", front: [12, 13, 14, 16, 31], back: [4, 12] },
+    { issue: "2026018", date: "2026-02-23", front: [9, 11, 19, 30, 35], back: [1, 12] },
+    { issue: "2026017", date: "2026-02-21", front: [4, 5, 10, 23, 31], back: [7, 12] },
+    { issue: "2026016", date: "2026-02-18", front: [8, 9, 12, 19, 24], back: [1, 6] },
+    { issue: "2026015", date: "2026-02-16", front: [1, 4, 10, 13, 17], back: [3, 11] },
+    { issue: "2026014", date: "2026-02-14", front: [16, 18, 23, 34, 35], back: [1, 6] },
+    { issue: "2026013", date: "2026-02-11", front: [3, 5, 6, 23, 26], back: [1, 4] },
+    { issue: "2026012", date: "2026-02-09", front: [1, 2, 9, 22, 25], back: [1, 6] },
+    { issue: "2026011", date: "2026-02-07", front: [14, 21, 23, 29, 33], back: [2, 10] },
+    { issue: "2026010", date: "2026-02-04", front: [2, 3, 13, 18, 26], back: [2, 9] },
+    { issue: "2026009", date: "2026-02-02", front: [5, 12, 13, 14, 33], back: [5, 8] },
+    { issue: "2026008", date: "2026-01-31", front: [3, 6, 17, 21, 33], back: [5, 11] },
+    { issue: "2026007", date: "2026-01-28", front: [1, 3, 13, 20, 26], back: [3, 10] },
+    { issue: "2026006", date: "2026-01-26", front: [5, 12, 18, 23, 35], back: [6, 12] },
+    { issue: "2026005", date: "2026-01-24", front: [2, 4, 16, 23, 35], back: [6, 11] },
+    { issue: "2026004", date: "2026-01-21", front: [5, 18, 23, 25, 32], back: [5, 9] },
+    { issue: "2026003", date: "2026-01-19", front: [2, 9, 11, 15, 16], back: [2, 4] },
+    { issue: "2026002", date: "2026-01-17", front: [4, 8, 15, 20, 31], back: [7, 8] },
   ];
 
-  // Populate rowIssues
+  const sourceDraws = sortDrawsByIssue(draws).slice(-drawRows);
+
   rowIssues = {};
-  [...draws].reverse().forEach((draw, index) => {
-    const row = index + 1;
-    rowIssues[row] = draw.issue;
+  sourceDraws.forEach((draw, index) => {
+    rowIssues[index + 1] = draw.issue;
   });
 
-  return [...draws].reverse().flatMap((draw, index) => {
+  return sourceDraws.flatMap((draw, index) => {
     const row = index + 1;
     return [
       ...draw.front.map((number) => makeBall(row, "front", number, red)),
@@ -679,7 +596,6 @@ function createBuiltInDrawBalls() {
 function seedLatestDrawVersion() {
   const title = "2026-05-11版本";
   const id = "preset-latest-draw-2026051";
-  // Build balls first to populate rowIssues
   const balls = createBuiltInDrawBalls();
   const latestVersion = {
     id,
@@ -699,7 +615,7 @@ function seedLatestDrawVersion() {
   if (existing) {
     Object.assign(existing, latestVersion);
   } else {
-    versions.push(latestVersion);
+    versions.unshift(latestVersion);
   }
   writeStorage(versionStorageKey, versions);
 }
@@ -716,12 +632,11 @@ function saveVersion() {
     balls: cloneBalls(balls),
   };
 
-  versions.push(version);
+  versions.unshift(version);
   versions = versions.slice(0, 80);
   writeStorage(versionStorageKey, versions);
   currentBaseTitle = version.title;
   updateBaseLabel();
-  updateVersionBanner();
   persistDraft();
   renderVersions();
   showVersion(version.id);
@@ -740,9 +655,7 @@ function parseDrawLines(text) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      // 提取期号并转为5位格式（如 26052）
-      const fullIssue = line.match(/\b(20\d{5})\b/)?.[1] || "";
-      const issue = fullIssue.replace(/^20(\d{5})$/, "$1");
+      const issue = line.match(/\b(20\d{5})\b/)?.[1] || "";
       const date = extractDate(line);
       const cleanLine = line
         .replace(/\b20\d{2}[-/.年]\d{1,2}[-/.月]\d{1,2}日?\b/g, " ")
@@ -774,76 +687,186 @@ function extractDrawDate(text) {
   return `${match[1]}-${pad(match[2])}-${pad(match[3])}`;
 }
 
+function parseIntegerValue(value) {
+  if (value == null || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
+  const match = String(value).replace(/,/g, "").match(/\d+/);
+  return match ? Number(match[0]) : null;
+}
+
+function normalizeIssue(value) {
+  const number = parseIntegerValue(value);
+  if (!number) return "";
+  const digits = String(number);
+  if (digits.length === 7 && digits.startsWith("20")) return digits.slice(2);
+  if (digits.length > 5) return digits.slice(-5);
+  return digits.padStart(5, "0");
+}
+
+function parseDateValue(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  if (typeof value === "number" && Number.isFinite(value) && value > 20000 && value < 80000) {
+    return new Date(Date.UTC(1899, 11, 30) + value * 86400000).toISOString().slice(0, 10);
+  }
+  return extractDrawDate(String(value || ""));
+}
+
+function sortDrawsByIssue(draws) {
+  return [...draws].sort((a, b) => {
+    const aIssue = parseIntegerValue(a.issue);
+    const bIssue = parseIntegerValue(b.issue);
+    if (aIssue && bIssue && aIssue !== bIssue) return aIssue - bIssue;
+    if (aIssue && !bIssue) return -1;
+    if (!aIssue && bIssue) return 1;
+    const dateCompare = String(a.date || "").localeCompare(String(b.date || ""));
+    return dateCompare || ((a.sequence || 0) - (b.sequence || 0));
+  });
+}
+
+function parseNumberList(value, max, expected) {
+  if (value == null || value === "") return [];
+  const text = typeof value === "number" ? String(Math.trunc(value)) : String(value);
+  const numbers = (text.match(/\d{1,2}/g) || []).map(Number).filter((number) => number >= 1 && number <= max);
+  return expected ? numbers.slice(0, expected) : numbers;
+}
+
+function normalizeHeader(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/\s+/g, "").replace(/[（）()【】[\]：:、,_-]/g, "");
+}
+
+function getColumnIndex(headers, names) {
+  return headers.findIndex((header) => names.some((name) => header === name || header.includes(name)));
+}
+
+function getNumberColumnIndexes(headers, zone, count) {
+  const digits = zone === "前区" ? ["一", "二", "三", "四", "五", "1", "2", "3", "4", "5"] : ["一", "二", "1", "2"];
+  const result = [];
+  digits.some((digit) => {
+    const index = headers.findIndex((header, columnIndex) => {
+      return !result.includes(columnIndex) && header.includes(zone) && header.includes(digit) && !header.includes("注数") && !header.includes("奖金");
+    });
+    if (index >= 0) result.push(index);
+    return result.length >= count;
+  });
+  return result.slice(0, count);
+}
+
+function parseDrawRowsFromSheet(rowsData, options = {}) {
+  const cleanRows = rowsData.filter((row) => row.some((cell) => String(cell ?? "").trim()));
+  const headerRowIndex = cleanRows.findIndex((row) => {
+    const headers = row.map(normalizeHeader);
+    return headers.some((header) => header.includes("前区")) && headers.some((header) => header.includes("后区"));
+  });
+  if (headerRowIndex < 0) return [];
+
+  const headers = cleanRows[headerRowIndex].map(normalizeHeader);
+  const issueColumn = getColumnIndex(headers, ["期号", "开奖期号"]);
+  const sequenceColumn = getColumnIndex(headers, ["序号", "顺序", "行号"]);
+  const dateColumn = getColumnIndex(headers, ["开奖时间", "开奖日期", "日期"]);
+  const frontColumns = getNumberColumnIndexes(headers, "前区", 5);
+  const backColumns = getNumberColumnIndexes(headers, "后区", 2);
+  const frontCombinedColumn = getColumnIndex(headers, ["前区号码", "前区号"]);
+  const backCombinedColumn = getColumnIndex(headers, ["后区号码", "后区号"]);
+
+  const parsedRows = cleanRows.slice(headerRowIndex + 1).map((row, index) => {
+    const front = frontColumns.length === 5
+      ? frontColumns.flatMap((column) => parseNumberList(row[column], 35)).slice(0, 5)
+      : parseNumberList(row[frontCombinedColumn], 35, 5);
+    const back = backColumns.length === 2
+      ? backColumns.flatMap((column) => parseNumberList(row[column], 12)).slice(0, 2)
+      : parseNumberList(row[backCombinedColumn], 12, 2);
+    if (front.length !== 5 || back.length !== 2) return null;
+    return {
+      sequence: parseIntegerValue(row[sequenceColumn]) || index + 1,
+      issue: normalizeIssue(row[issueColumn]),
+      date: parseDateValue(row[dateColumn]),
+      front,
+      back,
+    };
+  }).filter(Boolean);
+
+  return options.sort === false ? parsedRows : sortDrawsByIssue(parsedRows);
+}
+
+function serializeDraws(draws) {
+  return sortDrawsByIssue(draws).map((draw) => {
+    return [draw.issue, draw.date, draw.sequence ? `序号${draw.sequence}` : "", "前区", ...draw.front.map(pad), "后区", ...draw.back.map(pad)]
+      .filter(Boolean)
+      .join(" ");
+  }).join("\n");
+}
+
+async function handleDrawFileImport() {
+  const file = drawFileInput?.files?.[0];
+  if (!file) return;
+  if (!globalThis.XLSX) {
+    drawImportMessage.textContent = "Excel 解析库加载失败，请刷新页面后重试，或复制 Excel 内容粘贴到输入框。";
+    drawFileInput.value = "";
+    return;
+  }
+  try {
+    const workbook = globalThis.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rowsData = globalThis.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
+    const parsedDraws = parseDrawRowsFromSheet(rowsData);
+    if (parsedDraws.length === 0) {
+      drawImportMessage.textContent = "没有从文件中解析到有效数据，请确认表格包含期号、前区号码和后区号码。";
+      return;
+    }
+    drawDataInput.value = serializeDraws(parsedDraws);
+    const latestDate = parsedDraws.map((draw) => draw.date).filter(Boolean).sort().at(-1);
+    if (latestDate) drawDateInput.value = latestDate;
+    drawImportMessage.textContent = `已从 ${file.name} 导入 ${parsedDraws.length} 期，并按期号从小到大排列。`;
+  } catch (error) {
+    console.error(error);
+    drawImportMessage.textContent = "文件读取失败，请确认导入的是 Excel、CSV 或制表符文本文件。";
+  } finally {
+    drawFileInput.value = "";
+  }
+}
+
 function parseDrawLinesSafe(text) {
-  // 预处理：移除 Markdown 表格分隔线（如 | --- | --- | --- |）
   const lines = String(text || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => !line.match(/^\|[\s\-:|]+\|$/) && Boolean(line));
+    .filter(Boolean);
 
-  return lines.map((line) => {
-    let issue = "";
-    let cleanLine = line;
+  if (lines.some((line) => line.includes("\t"))) {
+    const parsedRows = parseDrawRowsFromSheet(lines.map((line) => line.split("\t")));
+    if (parsedRows.length > 0) return parsedRows;
+  }
 
-    // 处理 Markdown 表格格式：| 26052 | 02 03 20 28 33 | 02 12 |
-    const mdMatch = line.match(/^\|\s*(\d{5})\s*\|\s*([\d\s]+)\s*\|\s*([\d\s]+)\s*\|/);
-    if (mdMatch) {
-      issue = mdMatch[1];
-      const frontNums = mdMatch[2].trim().split(/\s+/).map(Number);
-      const backNums = mdMatch[3].trim().split(/\s+/).map(Number);
-      if (frontNums.length === 5 && backNums.length === 2) {
-        const front = frontNums;
-        const back = backNums;
-        if (front.every((n) => n >= 1 && n <= 35) && back.every((n) => n >= 1 && n <= 12)) {
-          return { issue, date: "", front, back };
-        }
-      }
-    }
-
-    // 原始解析逻辑：支持普通文本格式
-    // 先匹配7位期号
-    const fullIssue = line.match(/\b(20\d{5})\b/)?.[1];
-    if (fullIssue) {
-      issue = fullIssue.replace(/^20(\d{5})$/, "$1");
-      cleanLine = cleanLine.replace(fullIssue, " ");
-    } else {
-      // 再尝试匹配行首的5位期号
-      const fiveDigitMatch = line.match(/^\s*(\d{5})\b/);
-      if (fiveDigitMatch) {
-        issue = fiveDigitMatch[1];
-        cleanLine = cleanLine.replace(fiveDigitMatch[0], " ");
-      }
-    }
-
-    const date = extractDrawDate(line);
-    cleanLine = cleanLine
-      .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, " ")
-      .replace(/20\d{2}年\d{1,2}月\d{1,2}日?/g, " ");
-
-    const numbers = (cleanLine.match(/\b\d{1,2}\b/g) || []).map(Number);
-    if (numbers.length < 7) return null;
-    const drawNumbers = numbers.slice(-7);
-    const front = drawNumbers.slice(0, 5);
-    const back = drawNumbers.slice(5, 7);
-    if (!front.every((number) => number >= 1 && number <= 35)) return null;
-    if (!back.every((number) => number >= 1 && number <= 12)) return null;
-    return { issue, date, front, back };
-  }).filter(Boolean).sort((a, b) => {
-    const aKey = a.issue || a.date || "";
-    const bKey = b.issue || b.date || "";
-    return aKey.localeCompare(bKey);
-  });
+  return sortDrawsByIssue(lines
+    .map((line) => {
+      const fullIssue = line.match(/\b(20\d{5})\b/)?.[1] || "";
+      const shortIssue = line.match(/\b(\d{5})\b/)?.[1] || "";
+      const issue = normalizeIssue(fullIssue || shortIssue);
+      const date = extractDrawDate(line);
+      const cleanLine = line
+        .replace(/\b20\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b/g, " ")
+        .replace(/20\d{2}年\d{1,2}月\d{1,2}日?/g, " ")
+        .replace(/\b20\d{5,}\b/g, " ");
+      const numbers = (cleanLine.match(/\b\d{1,2}\b/g) || []).map(Number);
+      if (numbers.length < 7) return null;
+      const drawNumbers = numbers.slice(-7);
+      const front = drawNumbers.slice(0, 5);
+      const back = drawNumbers.slice(5, 7);
+      if (!front.every((number) => number >= 1 && number <= 35)) return null;
+      if (!back.every((number) => number >= 1 && number <= 12)) return null;
+      return { issue, date, front, back };
+    })
+    .filter(Boolean));
 }
 
 function generateDrawVersion() {
   const drawText = drawDataInput.value.trim();
-  const parsedDraws = parseDrawLinesSafe(drawText);
+  const parsedDraws = sortDrawsByIssue(parseDrawLinesSafe(drawText));
   if (parsedDraws.length === 0) {
     drawImportMessage.textContent = "没有解析到有效开奖数据。请保证每行至少包含 5 个前区和 2 个后区号码。";
     return;
   }
 
-  const latestParsedDate = [...parsedDraws].reverse().find((draw) => draw.date)?.date;
+  const latestParsedDate = parsedDraws.map((draw) => draw.date).filter(Boolean).sort().at(-1);
   const date = drawDateInput.value || latestParsedDate || extractDrawDate(drawText) || new Date().toISOString().slice(0, 10);
   const red = "#d6202a";
   const blue = "#1768b7";
@@ -876,17 +899,16 @@ function generateDrawVersion() {
     if (index >= 0) {
       versions[index] = { ...versions[index], ...version };
     } else {
-      versions.push(version);
+      versions.unshift(version);
     }
   } else {
-    versions.push(version);
+    versions.unshift(version);
   }
   versions = versions.slice(0, 80);
   writeStorage(versionStorageKey, versions);
-  clearDrawEditMode();
-  drawImportMessage.textContent = `${wasEditing ? "已修改" : "已生成"} ${title}，共 ${sourceDraws.length} 期、${balls.length} 个球。`;
+  drawImportMessage.textContent = `已生成 ${title}，共 ${sourceDraws.length} 期、${balls.length} 个球。`;
   applyBalls(balls, { baseTitle: title, rowIssues: newRowIssues });
-  addHistory(`${wasEditing ? "修改" : "生成"} ${title}`, balls);
+  addHistory(`生成 ${title}`, balls);
   renderVersions();
   showVersion(version.id);
 }
@@ -941,7 +963,7 @@ function renderVersions() {
 
     const info = document.createElement("div");
     info.className = "version-info";
-    info.innerHTML = `<strong>${version.title || "历史版本"}</strong><span>${balls.length} 个球 · ${isDrawVersion(version) ? "开奖版本" : "调整版本"}</span>`;
+    info.innerHTML = `<strong>${version.title || "历史版本"}</strong><span>${balls.length} 个球</span>`;
 
     const actions = document.createElement("div");
     actions.className = "version-actions";
@@ -962,14 +984,6 @@ function renderVersions() {
       showVersion(version.id);
       addHistory(`基于 ${version.title || "历史版本"} 调整`, version.balls);
     });
-
-    if (isDrawVersion(version) && !version.protected) {
-      const editButton = document.createElement("button");
-      editButton.type = "button";
-      editButton.textContent = "修改";
-      editButton.addEventListener("click", () => startDrawEditMode(version));
-      actions.append(editButton);
-    }
 
     const deleteButton = document.createElement("button");
     deleteButton.type = "button";
@@ -1027,11 +1041,11 @@ board.addEventListener("click", (event) => {
   const row = Number(cell.dataset.row);
   const zone = cell.dataset.zone;
   const number = Number(cell.dataset.number);
+  syncInputs(row, zone, number);
   if (eraseMode) {
     removeBall(cell);
     return;
   }
-  syncInputs(row, zone, number);
   addBall(row, zone, number, cell.dataset.value, colorInput.value);
 });
 
@@ -1047,7 +1061,6 @@ addBallButton.addEventListener("click", () => {
 eraseButton.addEventListener("click", () => {
   eraseMode = !eraseMode;
   eraseButton.setAttribute("aria-pressed", String(eraseMode));
-  board.classList.toggle("erase-mode", eraseMode);
 });
 
 deleteColorButton.addEventListener("click", () => {
@@ -1062,171 +1075,100 @@ deleteColorButton.addEventListener("click", () => {
 clearButton.addEventListener("click", () => clearBoard());
 
 function handleDescAdd() {
-  const text = descInput.value.trim();
+  const text = descInput?.value.trim();
   if (!text) return;
 
-  const lines = text.split(/\r?\n/).filter(l => l.trim());
-  if (lines.length === 0) return;
-
-  // 检测格式
-  const isMarkdownTable = lines.some(line => line.match(/^\|\s*\d+\s*\|/));
-  const isTabSeparated = lines.some(line => line.includes('\t'));
-
   let addedCount = 0;
+  const added = [];
+  text.split(/[\r\n;；]+/).forEach((line) => {
+    const parsed = parseBallDescription(line);
+    if (!parsed) return;
+    parsed.numbers.forEach((number) => {
+      const before = getCell(parsed.row, parsed.zone, number)?.querySelector(".ball");
+      addBall(parsed.row, parsed.zone, number, pad(number), parsed.color, false);
+      if (!before) addedCount += 1;
+      added.push({ row: parsed.row, zone: parsed.zone, number, label: pad(number), color: parsed.color });
+    });
+  });
 
-  if (isMarkdownTable) {
-    // 解析 Markdown 表格格式
-    const currentColor = colorInput.value;
-    for (const line of lines) {
-      const match = line.match(/^\|\s*(\d+)\s*\|\s*([\d\s]+)\s*\|\s*([\d\s]+)\s*\|/);
-      if (!match) continue;
-
-      const row = parseInt(match[1], 10);
-      const frontNums = match[2].trim().split(/\s+/).map(Number);
-      const backNums = match[3].trim().split(/\s+/).map(Number);
-
-      if (frontNums.length === 5 && backNums.length === 2) {
-        // 添加前区号码
-        for (const num of frontNums) {
-          const cell = getCell(row, "front", num);
-          if (cell) {
-            const existing = cell.querySelector(".ball");
-            if (!existing) {
-              addBall(row, "front", num, pad(num), currentColor, false);
-              addedCount++;
-            } else {
-              addBall(row, "front", num, pad(num), currentColor, false);
-            }
-          }
-        }
-        // 添加后区号码
-        for (const num of backNums) {
-          const cell = getCell(row, "back", num);
-          if (cell) {
-            const existing = cell.querySelector(".ball");
-            if (!existing) {
-              addBall(row, "back", num, pad(num), currentColor, false);
-              addedCount++;
-            } else {
-              addBall(row, "back", num, pad(num), currentColor, false);
-            }
-          }
-        }
-      }
-    }
-  } else if (isTabSeparated) {
-    // 支持制表符分隔格式（如从Excel复制的数据）
-    const currentColor = colorInput.value;
-    for (const line of lines) {
-      const parts = line.split('\t').map(p => p.trim()).filter(Boolean);
-      // 跳过表头
-      if (parts[0] === '序号' || parts[0] === '顺序' || isNaN(parseInt(parts[0], 10))) continue;
-
-      if (parts.length >= 3) {
-        const row = parseInt(parts[0], 10);
-        if (row < 1 || row > rows) continue;
-
-        const frontNums = parts[1].split(/\s+/).map(Number).filter(n => n > 0 && n <= 35);
-        const backNums = parts[2].split(/\s+/).map(Number).filter(n => n > 0 && n <= 12);
-
-        if (frontNums.length === 5 && backNums.length === 2) {
-          // 添加前区号码
-          for (const num of frontNums) {
-            const cell = getCell(row, "front", num);
-            if (cell) {
-              const existing = cell.querySelector(".ball");
-              if (!existing) {
-                addBall(row, "front", num, pad(num), currentColor, false);
-                addedCount++;
-              } else {
-                addBall(row, "front", num, pad(num), currentColor, false);
-              }
-            }
-          }
-          // 添加后区号码
-          for (const num of backNums) {
-            const cell = getCell(row, "back", num);
-            if (cell) {
-              const existing = cell.querySelector(".ball");
-              if (!existing) {
-                addBall(row, "back", num, pad(num), currentColor, false);
-                addedCount++;
-              } else {
-                addBall(row, "back", num, pad(num), currentColor, false);
-              }
-            }
-          }
-        }
-      }
-    }
-  } else {
-    // 原有的单条/批量格式解析
-    const batchLines = text.split(/[\n;；]/).filter(l => l.trim());
-    let lastResult = null;
-
-    for (const line of batchLines) {
-      const result = parseBallDescription(line.trim());
-      if (!result) continue;
-
-      // 如果是多个号码（逗号分隔）
-      if (result.numbers && result.numbers.length > 0) {
-        for (const num of result.numbers) {
-          const cell = getCell(result.row, result.zone, num);
-          if (cell) {
-            const existing = cell.querySelector(".ball");
-            if (!existing) {
-              addBall(result.row, result.zone, num, pad(num), result.color, false);
-              addedCount++;
-            } else {
-              // 已有球，叠加颜色
-              addBall(result.row, result.zone, num, pad(num), result.color, false);
-            }
-          }
-        }
-      } else {
-        // 单个号码
-        const cell = getCell(result.row, result.zone, result.number);
-        if (cell) {
-          const existing = cell.querySelector(".ball");
-          if (!existing) {
-            addBall(result.row, result.zone, result.number, pad(result.number), result.color, false);
-            addedCount++;
-          } else {
-            // 已有球，叠加颜色
-            addBall(result.row, result.zone, result.number, pad(result.number), result.color, false);
-          }
-        }
-      }
-      lastResult = result;
-    }
-  }
-
-  if (addedCount > 0) {
-    addHistory(`按描述添加 ${addedCount} 个球`, cloneBalls(collectBalls()));
-    persistDraft();
-    updateCount();
-    descInput.value = "";
-    descInput.placeholder = `已添加 ${addedCount} 个球`;
-  } else {
+  if (added.length === 0) {
     descInput.select();
+    return;
+  }
+  addHistory(`按描述添加 ${addedCount} 个球`, added);
+  persistDraft();
+  updateCount();
+  descInput.value = "";
+  descInput.placeholder = `已添加 ${addedCount} 个球`;
+}
+
+function addDrawRowsByReverseOrder(draws, sourceName = "Excel") {
+  const currentColor = colorInput.value;
+  const importedDraws = draws.slice(-rows).reverse();
+  const added = [];
+
+  importedDraws.forEach((draw, index) => {
+    const row = index + 1;
+    [
+      ...draw.front.map((number) => ({ zone: "front", number })),
+      ...draw.back.map((number) => ({ zone: "back", number })),
+    ].forEach(({ zone, number }) => {
+      addBall(row, zone, number, pad(number), currentColor, false);
+      added.push({ row, zone, number, label: pad(number), color: currentColor });
+    });
+  });
+
+  updateCount();
+  persistDraft();
+  addHistory(`按描述导入 ${sourceName}（倒序）`, added);
+  if (descInput) {
+    descInput.value = "";
+    descInput.placeholder = `已倒序导入 ${importedDraws.length} 行，最下面的数据在第1行`;
   }
 }
 
-descAddButton.addEventListener("click", handleDescAdd);
-descInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") descAddButton.click();
+async function handleDescFileImport() {
+  const file = descFileInput?.files?.[0];
+  if (!file) return;
+  if (!globalThis.XLSX) {
+    descInput.placeholder = "Excel 解析库加载失败，请刷新页面后重试。";
+    descFileInput.value = "";
+    return;
+  }
+
+  try {
+    const workbook = globalThis.XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rowsData = globalThis.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
+    const parsedDraws = parseDrawRowsFromSheet(rowsData, { sort: false });
+    if (parsedDraws.length === 0) {
+      descInput.placeholder = "没有解析到有效数据，请确认 Excel 包含前区和后区号码。";
+      return;
+    }
+    addDrawRowsByReverseOrder(parsedDraws, file.name);
+  } catch (error) {
+    console.error(error);
+    descInput.placeholder = "Excel 导入失败，请确认文件格式正确。";
+  } finally {
+    descFileInput.value = "";
+  }
+}
+
+descFileInput?.addEventListener("change", handleDescFileImport);
+descAddButton?.addEventListener("click", handleDescAdd);
+descInput?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) handleDescAdd();
 });
-descHelpButton.addEventListener("click", () => {
-  const isHidden = descHelpTip.hidden;
-  descHelpTip.hidden = !isHidden;
-  descHelpButton.textContent = isHidden ? "×" : "?";
-  if (isHidden) descHelpTip.scrollIntoView({ behavior: "smooth", block: "nearest" });
+descHelpButton?.addEventListener("click", () => {
+  if (!descHelpTip) return;
+  descHelpTip.hidden = !descHelpTip.hidden;
+  descHelpButton.textContent = descHelpTip.hidden ? "?" : "×";
 });
 
 sampleButton.addEventListener("click", () => {
   const added = [];
   const colors = ["#d6202a", "#1768b7", "#14a365", "#f59e0b"];
-  for (let row = 1; row <= drawRows; row += 1) {
+  for (let row = 1; row <= rows; row += 1) {
     const frontOne = ((row * 7) % zones.front.max) + 1;
     const frontTwo = ((row * 13) % zones.front.max) + 1;
     const backOne = ((row * 5) % zones.back.max) + 1;
@@ -1245,11 +1187,8 @@ sampleButton.addEventListener("click", () => {
 
 saveHistoryButton.addEventListener("click", () => addHistory("保存记录", collectBalls()));
 saveVersionButton.addEventListener("click", saveVersion);
+drawFileInput?.addEventListener("change", handleDrawFileImport);
 generateDrawVersionButton.addEventListener("click", generateDrawVersion);
-cancelEditDrawVersionButton.addEventListener("click", () => {
-  clearDrawEditMode();
-  drawImportMessage.textContent = "已取消修改。";
-});
 
 unlockAppButton.addEventListener("click", () => {
   if (passwordMatches(appPassword.value, pagePasswordValue)) {
@@ -1277,7 +1216,6 @@ unlockVersionsButton.addEventListener("click", () => {
     versionsUnlocked = true;
     sessionStorage.setItem(versionAuthStorageKey, "true");
     versionPassword.value = "";
-    versionPassword.blur();
     renderVersions();
     return;
   }
@@ -1310,13 +1248,11 @@ clearHistoryButton.addEventListener("click", () => {
 });
 
 clearVersionsButton.addEventListener("click", () => {
-  const removedCount = versions.filter((version) => !isDrawVersion(version)).length;
-  versions = versions.filter(isDrawVersion);
+  versions = [];
   writeStorage(versionStorageKey, versions);
   renderVersions();
   versionPreviewTitle.textContent = "未选择版本";
   versionPreview.innerHTML = "";
-  versionAuthMessage.textContent = `已清空 ${removedCount} 个普通调整版本，开奖版本已保留。`;
 });
 
 versionSearch.addEventListener("input", renderVersions);
@@ -1345,19 +1281,8 @@ swatches.forEach((swatch) => {
 });
 
 buildBoard();
-normalizeExistingVersions();
 seedLatestDrawVersion();
-normalizeExistingVersions();
-// Auto-load the latest draw version (always load latest version, ignore draft)
-const drawVersions = versions.filter((v) => isDrawVersion(v));
-const latest = drawVersions.length > 0
-  ? drawVersions.reduce((a, b) => (a.timestamp || 0) > (b.timestamp || 0) ? a : b)
-  : null;
-if (latest) {
-  applyBalls(latest.balls, { baseTitle: latest.title || "最新开奖", rowIssues: latest.rowIssues, persist: true });
-} else {
-  restoreDraft();
-}
+restoreDraft();
 updateRowLabels();
 updateVersionBanner();
 updateCount();

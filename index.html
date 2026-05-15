@@ -34,7 +34,7 @@
         <div class="controls">
           <label>
             <span>行</span>
-            <input id="rowInput" type="number" min="1" max="55" value="1" />
+            <input id="rowInput" type="number" min="1" max="35" value="1" />
           </label>
           <label>
             <span>区</span>
@@ -67,6 +67,10 @@
         <div class="text-add">
           <div class="text-add-wrapper">
             <textarea id="descInput" rows="3" placeholder="如：前区1行4,10,15红球（逗号分隔多号），或粘贴Markdown表格批量添加"></textarea>
+            <label class="file-import-button text-file-import">
+              <input id="descFileInput" type="file" accept=".xlsx,.xls,.csv,.tsv" />
+              导入Excel
+            </label>
             <button id="descAddButton" type="button">按描述添加</button>
             <button id="descHelpButton" type="button" class="help-btn" title="查看语法规则">?</button>
           </div>
@@ -85,6 +89,7 @@
             <code>顺序	前区号码	后区号码</code><br/>
             <code>1	12 17 20 26 35	04 09</code><br/>
             <code>2	04 10 15 22 27	06 10</code><br/><br/>
+            <strong>Excel导入：</strong>读取前区/后区列，按倒序添加，表格最下面一行放到第1行。<br/><br/>
             <strong>彩虹球：</strong>同位置多颜色显示<span style="background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f);-webkit-background-clip:text;color:transparent;font-weight:bold">彩虹</span><br/><br/>
             <strong>支持：</strong>中文数字、多行/分号分隔
           </div>
@@ -124,8 +129,14 @@
       <section class="draw-import-shell" aria-label="生成开奖版本">
         <div class="history-top">
           <h2>生成开奖版本</h2>
-          <button id="generateDrawVersionButton" type="button">生成版本</button>
-          <button id="cancelEditDrawVersionButton" type="button" hidden>取消修改</button>
+          <div class="draw-version-actions">
+            <label class="file-import-button">
+              <input id="drawFileInput" type="file" accept=".xlsx,.xls,.csv,.tsv" />
+              导入Excel
+            </label>
+            <button id="generateDrawVersionButton" type="button">生成版本</button>
+            <button id="cancelEditDrawVersionButton" type="button" hidden>取消修改</button>
+          </div>
         </div>
         <div class="draw-import-body">
           <label>
@@ -136,7 +147,7 @@
             id="drawDataInput"
             placeholder="粘贴开奖数据，每行一期。例如：&#10;2026052 2026-05-13 前区 01 02 03 04 05 后区 06 07&#10;2026051 2026-05-11 13 18 28 32 33 02 11"
           ></textarea>
-          <p id="drawImportMessage" class="version-auth-message">支持一行一期：前 5 个号码作为前区，后 2 个号码作为后区。</p>
+          <p id="drawImportMessage" class="version-auth-message">支持粘贴或导入 Excel：读取期号、序号、前区号码、后区号码后生成版本。</p>
         </div>
       </section>
 
@@ -190,6 +201,7 @@
       </div>
     </main>
 
-    <script src="script.js?v=20260514-12"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="script.js?v=20260514-13"></script>
   </body>
 </html>
