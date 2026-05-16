@@ -132,24 +132,35 @@ function getCell(row, zone, number) {
 
 function getBallData(ball) {
   const cell = ball.closest(".cell");
+  const rawColors = ball.dataset.colors;
+  const colors = rawColors ? rawColors.split(",").filter(Boolean).map(normalizeColor) : null;
   return {
     row: Number(cell.dataset.row),
     zone: cell.dataset.zone,
     number: Number(cell.dataset.number),
     label: ball.textContent,
     color: normalizeColor(ball.dataset.color),
+    colors: colors && colors.length > 1 ? colors : null,
+    protected: ball.dataset.protected === "true",
   };
 }
 
 function cloneBall(ball) {
   const number = Number(ball.number) || Number(ball.label) || 0;
-  return {
+  const result = {
     row: Number(ball.row) || 0,
     zone: ball.zone,
     number,
     label: String(ball.label || pad(number)),
     color: normalizeColor(ball.color) || "#999999",
   };
+  if (ball.colors && Array.isArray(ball.colors) && ball.colors.length > 1) {
+    result.colors = ball.colors.map(normalizeColor).filter(Boolean);
+  }
+  if (ball.protected) {
+    result.protected = true;
+  }
+  return result;
 }
 
 function cloneBalls(balls) {
@@ -355,14 +366,50 @@ function updateCount() {
   ballCount.textContent = board.querySelectorAll(".ball").length;
 }
 
-function addBall(row, zone, number, label = numberInput.value, color = colorInput.value, shouldRecord = true) {
+function addBall(row, zone, number, label = numberInput.value, color = colorInput.value, shouldRecord = true, existingColors = null, options = {}) {
   const cell = getCell(row, zone, number);
   if (!cell) return;
 
   const previous = cell.querySelector(".ball");
   const cleanColor = normalizeColor(color);
   const cleanLabel = String(label || cell.dataset.value).slice(0, 2).padStart(2, "0");
-  cell.innerHTML = `<span class="ball" data-color="${cleanColor}" style="--ball-color:${cleanColor}">${cleanLabel}</span>`;
+  const isProtected = Boolean(options.protected) || previous?.dataset.protected === "true";
+  const protectedAttr = isProtected ? ' data-protected="true"' : "";
+
+  // 从版本恢复彩虹球（shouldRecord=false 且 existingColors 包含多种颜色）
+  if (!shouldRecord && existingColors && existingColors.length > 1) {
+    const colorsStr = existingColors.join(",");
+    cell.innerHTML = `<span class="ball rainbow-ball" data-color="${cleanColor}" data-colors="${colorsStr}"${protectedAttr} style="--ball-color:#1f2937;background:#1f2937">${cleanLabel}</span>`;
+    updateCount();
+    return;
+  }
+
+  // 检查是否已有球，如果有则叠加彩虹效果（黑色）
+  if (previous) {
+    const existingColorsArr = previous.dataset.colors
+      ? previous.dataset.colors.split(",")
+      : [previous.dataset.color];
+    const shouldStackAsBlack = !shouldRecord || !existingColorsArr.includes(cleanColor);
+    if (shouldStackAsBlack) {
+      const hadColor = existingColorsArr.includes(cleanColor);
+      if (!hadColor) {
+        existingColorsArr.push(cleanColor);
+      }
+      const newColors = existingColorsArr.join(",");
+      previous.dataset.colors = newColors;
+      if (isProtected) previous.dataset.protected = "true";
+      previous.style.background = "#1f2937";
+      previous.classList.add("rainbow-ball");
+      updateCount();
+      if (shouldRecord) {
+        addHistory("叠加彩虹球", { row, zone, number, label: cleanLabel, color: newColors, colors: existingColorsArr });
+        persistDraft();
+      }
+      return;
+    }
+  }
+
+  cell.innerHTML = `<span class="ball" data-color="${cleanColor}"${protectedAttr} style="--ball-color:${cleanColor}">${cleanLabel}</span>`;
   updateCount();
 
   if (shouldRecord) {
@@ -371,9 +418,10 @@ function addBall(row, zone, number, label = numberInput.value, color = colorInpu
   }
 }
 
-function removeBall(cell, shouldRecord = true, action = "删除球") {
+function removeBall(cell, shouldRecord = true, action = "删除球", options = {}) {
   const ball = cell.querySelector(".ball");
   if (!ball) return null;
+  if (ball.dataset.protected === "true" && !options.force) return null;
 
   const removed = getBallData(ball);
   cell.textContent = cell.dataset.value;
@@ -387,9 +435,12 @@ function removeBall(cell, shouldRecord = true, action = "删除球") {
   return removed;
 }
 
-function clearBoard(shouldRecord = true) {
-  const removed = collectBalls();
-  board.querySelectorAll(".cell").forEach((cell) => removeBall(cell, false));
+function clearBoard(shouldRecord = true, force = false) {
+  const removed = [];
+  board.querySelectorAll(".cell").forEach((cell) => {
+    const removedBall = removeBall(cell, false, "删除球", { force });
+    if (removedBall) removed.push(removedBall);
+  });
   rowIssues = {};
   updateCount();
 
@@ -417,9 +468,13 @@ function updateRowLabels() {
 }
 
 function applyBalls(balls, options = {}) {
-  clearBoard(false);
+  clearBoard(false, true);
   if (options.rowIssues) rowIssues = { ...options.rowIssues };
-  cloneBalls(balls).forEach((ball) => addBall(ball.row, ball.zone, ball.number, ball.label, ball.color, false));
+  cloneBalls(balls).forEach((ball) => {
+    addBall(ball.row, ball.zone, ball.number, ball.label, ball.color, false, ball.colors, {
+      protected: Boolean(options.protectBalls || ball.protected),
+    });
+  });
   updateCount();
   updateRowLabels();
 
@@ -587,8 +642,8 @@ function createBuiltInDrawBalls() {
   return sourceDraws.flatMap((draw, index) => {
     const row = index + 1;
     return [
-      ...draw.front.map((number) => makeBall(row, "front", number, red)),
-      ...draw.back.map((number) => makeBall(row, "back", number, blue)),
+      ...draw.front.map((number) => ({ ...makeBall(row, "front", number, red), protected: true })),
+      ...draw.back.map((number) => ({ ...makeBall(row, "back", number, blue), protected: true })),
     ];
   });
 }
@@ -876,8 +931,8 @@ function generateDrawVersion() {
     const row = index + 1;
     newRowIssues[row] = draw.issue || `${draw.date}-${row}`;
     return [
-      ...draw.front.map((number) => makeBall(row, "front", number, red)),
-      ...draw.back.map((number) => makeBall(row, "back", number, blue)),
+      ...draw.front.map((number) => ({ ...makeBall(row, "front", number, red), protected: true })),
+      ...draw.back.map((number) => ({ ...makeBall(row, "back", number, blue), protected: true })),
     ];
   });
   const title = `${date}版本`;
@@ -907,7 +962,7 @@ function generateDrawVersion() {
   versions = versions.slice(0, 80);
   writeStorage(versionStorageKey, versions);
   drawImportMessage.textContent = `已生成 ${title}，共 ${sourceDraws.length} 期、${balls.length} 个球。`;
-  applyBalls(balls, { baseTitle: title, rowIssues: newRowIssues });
+  applyBalls(balls, { baseTitle: title, rowIssues: newRowIssues, protectBalls: true });
   addHistory(`生成 ${title}`, balls);
   renderVersions();
   showVersion(version.id);
@@ -980,7 +1035,7 @@ function renderVersions() {
     restoreButton.type = "button";
     restoreButton.textContent = "在此基础上调整";
     restoreButton.addEventListener("click", () => {
-      applyBalls(version.balls, { baseTitle: version.title || "历史版本", rowIssues: version.rowIssues });
+      applyBalls(version.balls, { baseTitle: version.title || "历史版本", rowIssues: version.rowIssues, protectBalls: isDrawVersion(version) });
       showVersion(version.id);
       addHistory(`基于 ${version.title || "历史版本"} 调整`, version.balls);
     });
@@ -1042,7 +1097,7 @@ board.addEventListener("click", (event) => {
   const zone = cell.dataset.zone;
   const number = Number(cell.dataset.number);
   syncInputs(row, zone, number);
-  if (eraseMode) {
+  if (cell.querySelector(".ball")) {
     removeBall(cell);
     return;
   }
@@ -1113,8 +1168,8 @@ function addDrawRowsByReverseOrder(draws, sourceName = "Excel") {
       ...draw.front.map((number) => ({ zone: "front", number })),
       ...draw.back.map((number) => ({ zone: "back", number })),
     ].forEach(({ zone, number }) => {
-      addBall(row, zone, number, pad(number), currentColor, false);
-      added.push({ row, zone, number, label: pad(number), color: currentColor });
+      addBall(row, zone, number, pad(number), currentColor, false, null, { protected: true });
+      added.push({ row, zone, number, label: pad(number), color: currentColor, protected: true });
     });
   });
 
