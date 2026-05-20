@@ -63,6 +63,9 @@ const versionAuthStorageKey = "lottery-version-auth";
 const historyStorageKey = "lottery-board-history";
 const versionStorageKey = "lottery-board-versions";
 const draftStorageKey = "lottery-board-current-draft";
+const browserOnlyStorage = globalThis.localStorage;
+const localVersionNotice =
+  "\u7248\u672c\u4fe1\u606f\u4ec5\u4fdd\u5b58\u5728\u5f53\u524d\u6d4f\u89c8\u5668\u672c\u673a\uff0c\u4e0d\u4f1a\u4e0a\u4f20\u6216\u5199\u5165\u94fe\u63a5\u3002";
 const zones = {
   front: { label: "前区", max: 35, element: frontBoard },
   back: { label: "后区", max: 12, element: backBoard },
@@ -87,14 +90,14 @@ function clamp(value, min, max) {
 
 function readStorage(key) {
   try {
-    return JSON.parse(localStorage.getItem(key)) || [];
+    return JSON.parse(browserOnlyStorage.getItem(key)) || [];
   } catch {
     return [];
   }
 }
 
 function writeStorage(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  browserOnlyStorage.setItem(key, JSON.stringify(value));
 }
 
 function makeId() {
@@ -998,7 +1001,7 @@ function renderVersions() {
     return;
   }
 
-  versionAuthMessage.textContent = "已验证。历史版本是冻结快照，点击“在此基础上调整”只会复制到当前编辑区。";
+  versionAuthMessage.textContent = `已验证。${localVersionNotice}历史版本是冻结快照，点击“在此基础上调整”只会复制到当前编辑区。`;
   const query = versionSearch.value.trim();
   const matchedVersions = versions.filter((version) => versionMatches(version, query));
   versionList.innerHTML = "";
