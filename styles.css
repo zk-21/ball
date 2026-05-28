@@ -10,6 +10,7 @@
   --ball-size: 25px;
   --board-zoom: 1;
   --row-label-w: 92px;
+  --back-row-label-w: 19px;
 }
 
 * {
@@ -402,8 +403,13 @@ button:active {
 }
 
 .back-title {
+  grid-template-columns: var(--back-row-label-w) 1fr;
   color: #1768b7;
   background: #f2f8ff;
+}
+
+.back-title::before {
+  width: var(--back-row-label-w);
 }
 
 .zone-board {
@@ -417,7 +423,7 @@ button:active {
 }
 
 .back-board {
-  grid-template-columns: 50px repeat(12, var(--cell));
+  grid-template-columns: var(--back-row-label-w) repeat(12, var(--cell));
 }
 
 .cell {
@@ -522,7 +528,7 @@ button:active {
 [data-zone="back"] .row-label {
   font-size: 10px;
   color: var(--muted);
-  width: 50px;
+  width: var(--back-row-label-w);
   flex-shrink: 0;
   white-space: nowrap;
   overflow: visible;
@@ -1018,6 +1024,7 @@ button:active {
     --ball-size: 18px;
     --board-zoom: 0.5;
     --row-label-w: 60px;
+    --back-row-label-w: 16px;
   }
 
   .toolbar {
@@ -1063,6 +1070,7 @@ button:active {
     --cell: 18px;
     --ball-size: 16px;
     --row-label-w: 50px;
+    --back-row-label-w: 14px;
   }
 
   .app {
@@ -1124,6 +1132,12 @@ button:active {
 
   .row-label-num {
     font-size: 7px;
+  }
+
+  [data-zone="back"] .row-label {
+    font-size: 8px;
+    padding: 0;
+    overflow: hidden;
   }
 
   .palette {
@@ -1223,7 +1237,42 @@ button:active {
     display: grid;
   }
 
-  .lock-form button {
-    width: 100%;
+.lock-form button {
+  width: 100%;
+}
+}
+
+@media (max-width: 932px) and (orientation: landscape) {
+  :root {
+    --cell: 18px;
+    --ball-size: 16px;
+    --row-label-w: 48px;
+    --back-row-label-w: 14px;
+  }
+
+  .app {
+    padding: 10px;
+  }
+
+  .board {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .zone-title {
+    height: 26px;
+    font-size: 12px;
+  }
+
+  .zone-title::before,
+  .front-title::before {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+
+  [data-zone="back"] .row-label {
+    font-size: 8px;
+    padding: 0;
+    overflow: hidden;
   }
 }

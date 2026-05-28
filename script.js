@@ -279,6 +279,7 @@ function unlockPage() {
   versionsUnlocked = true;
   sessionStorage.setItem(versionAuthStorageKey, "true");
   renderVersions();
+  fitBoardToScreen(true);
 }
 
 function updateBaseLabel() {
@@ -523,10 +524,14 @@ function getBoardNaturalWidth() {
   const rootStyle = getComputedStyle(document.documentElement);
   const boardStyle = getComputedStyle(board);
   const cellSize = parseFloat(rootStyle.getPropertyValue("--cell")) || 28;
+  const frontRowLabelWidth = parseFloat(rootStyle.getPropertyValue("--row-label-w")) || 92;
+  const backRowLabelWidth = parseFloat(rootStyle.getPropertyValue("--back-row-label-w")) || 19;
   const gap = parseFloat(boardStyle.gap) || 14;
   const paddingLeft = parseFloat(boardStyle.paddingLeft) || 0;
   const paddingRight = parseFloat(boardStyle.paddingRight) || 0;
-  return (zones.front.max + zones.back.max) * cellSize + gap + paddingLeft + paddingRight;
+  const frontWidth = frontRowLabelWidth + zones.front.max * cellSize;
+  const backWidth = backRowLabelWidth + zones.back.max * cellSize;
+  return frontWidth + backWidth + gap + paddingLeft + paddingRight;
 }
 
 function setBoardZoom(value) {
@@ -1340,7 +1345,6 @@ swatches.forEach((swatch) => {
 
 buildBoard();
 seedLatestDrawVersion();
-restoreDraft();
 updateRowLabels();
 updateVersionBanner();
 updateCount();
