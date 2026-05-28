@@ -21,6 +21,7 @@ const clearButton = document.querySelector("#clearButton");
 const sampleButton = document.querySelector("#sampleButton");
 const saveHistoryButton = document.querySelector("#saveHistoryButton");
 const saveVersionButton = document.querySelector("#saveVersionButton");
+const captureBoardButton = document.querySelector("#captureBoardButton");
 const clearHistoryButton = document.querySelector("#clearHistoryButton");
 const clearVersionsButton = document.querySelector("#clearVersionsButton");
 const ballCount = document.querySelector("#ballCount");
@@ -74,7 +75,7 @@ const versionStorageKey = "lottery-board-versions";
 const draftStorageKey = "lottery-board-current-draft";
 const browserOnlyStorage = globalThis.localStorage;
 const localVersionNotice =
-  "\u7248\u672c\u4fe1\u606f\u4ec5\u4fdd\u5b58\u5728\u5f53\u524d\u6d4f\u89c8\u5668\u672c\u673a\uff0c\u4e0d\u4f1a\u4e0a\u4f20\u6216\u5199\u5165\u94fe\u63a5\u3002";
+  "\u7248\u672c\u4fe1\u606f\u4f1a\u4fdd\u5b58\u5728\u5f53\u524d\u6d4f\u89c8\u5668\u672c\u673a\uff0c\u540c\u65f6\u4e0b\u8f7d\u5230\u4f60\u7684\u672c\u5730\u6587\u4ef6\u3002";
 const zones = {
   front: { label: "前区", max: 35, element: frontBoard },
   back: { label: "后区", max: 12, element: backBoard },
@@ -128,6 +129,19 @@ function formatTime(date = new Date()) {
 
 function normalizeColor(color) {
   return String(color || "").trim().toLowerCase();
+}
+
+function boostCaptureBallColor(color) {
+  const normalized = normalizeColor(color);
+  const boostMap = {
+    "#d6202a": "#c91721",
+    "#1768b7": "#0f5aa8",
+    "#14a365": "#0f8f58",
+    "#f59e0b": "#db8500",
+    "#7c3aed": "#6b21d9",
+    "#111827": "#111827",
+  };
+  return boostMap[normalized] || color;
 }
 
 function normalizePassword(value) {
@@ -832,6 +846,137 @@ function saveVersion() {
   renderVersions();
   showVersion(version.id);
   addHistory("保存版本", balls);
+  downloadVersionFile(version);
+}
+
+async function captureBoard() {
+  if (!globalThis.html2canvas) {
+    alert("截图组件加载失败，请刷新页面后重试。");
+    return;
+  }
+
+  const target = document.querySelector(".board");
+  const boardShell = document.querySelector(".board-shell");
+  const boardActions = boardShell?.querySelector(".board-actions");
+  if (!target) return;
+
+  const filenameBase = currentBaseTitle
+    ? currentBaseTitle.replace(/[\\/:*?\"<>|]/g, "-")
+    : `选号区-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}`;
+
+  const previousText = captureBoardButton?.textContent;
+  let captureHost = null;
+  if (captureBoardButton) {
+    captureBoardButton.disabled = true;
+    captureBoardButton.textContent = "生成中...";
+  }
+
+  try {
+    const previousActionsDisplay = boardActions?.style.display || "";
+    const previousZoom = document.documentElement.style.getPropertyValue("--board-zoom");
+    if (boardActions) boardActions.style.display = "none";
+    document.documentElement.style.setProperty("--board-zoom", "1");
+
+    captureHost = document.createElement("div");
+    captureHost.style.position = "fixed";
+    captureHost.style.left = "-100000px";
+    captureHost.style.top = "0";
+    captureHost.style.padding = "0";
+    captureHost.style.margin = "0";
+    captureHost.style.background = "#ffffff";
+    captureHost.style.zIndex = "-1";
+
+    const clone = target.cloneNode(true);
+    clone.style.zoom = "1";
+    clone.style.transform = "none";
+    clone.style.width = "max-content";
+    clone.style.minWidth = "0";
+    clone.style.overflow = "visible";
+
+    clone.querySelectorAll('.cell[data-zone="front"]:not([data-pick="true"])').forEach((cell) => {
+      cell.style.background = "#ffe9e7";
+      cell.style.color = "#e06f66";
+    });
+    clone.querySelectorAll('.cell[data-zone="back"]:not([data-pick="true"])').forEach((cell) => {
+      cell.style.background = "#edf6ff";
+      cell.style.color = "#6f9ecf";
+    });
+    clone.querySelectorAll('.cell[data-pick="true"]').forEach((cell) => {
+      cell.style.background = "#fff6d8";
+      cell.style.color = "#b3913a";
+    });
+    clone.querySelectorAll('.cell[data-pick="true"][data-zone="back"]').forEach((cell) => {
+      cell.style.background = "#eaf8f0";
+      cell.style.color = "#58a07b";
+    });
+    clone.querySelectorAll(".row-label").forEach((label) => {
+      label.style.color = "#3f4b5f";
+      label.style.background = "#f1f4f9";
+    });
+
+    const sourceBalls = [...target.querySelectorAll(".ball")];
+    const clonedBalls = [...clone.querySelectorAll(".ball")];
+    sourceBalls.forEach((ball, index) => {
+      const cloneBall = clonedBalls[index];
+      if (!cloneBall) return;
+      const computed = getComputedStyle(ball);
+      const sourceColor = ball.dataset.color || computed.backgroundColor;
+      const boostedColor = boostCaptureBallColor(sourceColor);
+      cloneBall.style.background = boostedColor;
+      cloneBall.style.color = "#ffffff";
+      cloneBall.style.boxShadow = "0 2px 4px rgba(31, 41, 55, 0.28)";
+      cloneBall.style.border = "1px solid rgba(255, 255, 255, 0.3)";
+      cloneBall.style.setProperty("--ball-color", boostedColor);
+    });
+
+    captureHost.append(clone);
+    document.body.append(captureHost);
+
+    const canvas = await globalThis.html2canvas(clone, {
+      backgroundColor: "#ffffff",
+      scale: Math.max(2, globalThis.devicePixelRatio || 1),
+      useCORS: true,
+      width: clone.scrollWidth,
+      height: clone.scrollHeight,
+      windowWidth: clone.scrollWidth,
+      windowHeight: clone.scrollHeight,
+    });
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = `${filenameBase}.png`;
+    link.click();
+    captureHost.remove();
+    if (boardActions) boardActions.style.display = previousActionsDisplay;
+    document.documentElement.style.setProperty("--board-zoom", previousZoom || `${zoomInput.value / 100}`);
+  } catch (error) {
+    console.error(error);
+    alert("截图失败，请稍后重试。");
+  } finally {
+    captureHost?.remove();
+    document.documentElement.style.setProperty("--board-zoom", `${zoomInput.value / 100}`);
+    if (boardActions) boardActions.style.display = "";
+    if (captureBoardButton) {
+      captureBoardButton.disabled = false;
+      captureBoardButton.textContent = previousText || "截图";
+    }
+  }
+}
+
+function downloadVersionFile(version) {
+  if (!version) return;
+  const safeTitle = String(version.title || "版本")
+    .replace(/[\\/:*?\"<>|]/g, "-")
+    .trim() || "版本";
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    version,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `${safeTitle}.json`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
 function saveCurrentBoardAsVersion(title = "") {
@@ -857,6 +1002,7 @@ function saveCurrentBoardAsVersion(title = "") {
   renderVersions();
   showVersion(version.id);
   addHistory(`保存版本 ${version.title}`, balls);
+  downloadVersionFile(version);
   return version;
 }
 
@@ -1405,6 +1551,7 @@ sampleButton.addEventListener("click", () => {
 
 saveHistoryButton?.addEventListener("click", () => addHistory("保存记录", collectBalls()));
 saveVersionButton.addEventListener("click", saveVersion);
+captureBoardButton?.addEventListener("click", captureBoard);
 drawFileInput?.addEventListener("change", handleDrawFileImport);
 generateDrawVersionButton.addEventListener("click", generateDrawVersion);
 
