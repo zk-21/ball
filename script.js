@@ -30,6 +30,7 @@ const versionBannerText = document.querySelector("#versionBannerText");
 const historyList = document.querySelector("#historyList");
 const versionList = document.querySelector("#versionList");
 const versionSearch = document.querySelector("#versionSearch");
+const compareVersionsButton = document.querySelector("#compareVersionsButton");
 const versionPassword = document.querySelector("#versionPassword");
 const unlockVersionsButton = document.querySelector("#unlockVersionsButton");
 const lockVersionsButton = document.querySelector("#lockVersionsButton");
@@ -46,6 +47,14 @@ const versionModal = document.querySelector("#versionModal");
 const versionModalTitle = document.querySelector("#versionModalTitle");
 const versionModalBody = document.querySelector("#versionModalBody");
 const closeVersionModalButton = document.querySelector("#closeVersionModalButton");
+const compareModal = document.querySelector("#compareModal");
+const compareVersionOne = document.querySelector("#compareVersionOne");
+const compareVersionTwo = document.querySelector("#compareVersionTwo");
+const compareVersionThree = document.querySelector("#compareVersionThree");
+const compareHint = document.querySelector("#compareHint");
+const applyCompareButton = document.querySelector("#applyCompareButton");
+const saveCompareButton = document.querySelector("#saveCompareButton");
+const closeCompareModalButton = document.querySelector("#closeCompareModalButton");
 const descInput = document.querySelector("#descInput");
 const descFileInput = document.querySelector("#descFileInput");
 const descAddButton = document.querySelector("#descAddButton");
@@ -54,7 +63,7 @@ const descHelpTip = document.querySelector("#descHelpTip");
 const swatches = [...document.querySelectorAll(".swatch")];
 
 const drawRows = 35;
-const extraPickRows = 0;
+const extraPickRows = 10;
 const rows = drawRows + extraPickRows;
 const pagePasswordValue = "zk@001";
 const versionPasswordValue = "zk@001";
@@ -79,6 +88,8 @@ let currentBaseTitle = "";
 let userAdjustedZoom = false;
 let editingDrawVersionId = "";
 let rowIssues = {};
+let activeCompareSelection = [];
+let compareSourceVersionId = "";
 
 function pad(value) {
   return String(value).padStart(2, "0");
@@ -294,6 +305,12 @@ function updateVersionBanner() {
   versionBannerText.textContent = currentBaseTitle;
 }
 
+function getVersionLabel(version) {
+  const title = version?.title || "历史版本";
+  const time = version?.time ? ` / ${version.time}` : "";
+  return `${title}${time}`;
+}
+
 function persistDraft() {
   writeStorage(draftStorageKey, {
     baseTitle: currentBaseTitle,
@@ -343,6 +360,7 @@ function createDetailRow(ball) {
 }
 
 function renderHistory() {
+  if (!historyList) return;
   historyList.innerHTML = "";
   if (history.length === 0) {
     const empty = document.createElement("li");
@@ -491,6 +509,115 @@ function applyBalls(balls, options = {}) {
   if (options.persist !== false) persistDraft();
 }
 
+function getVersionById(id) {
+  return versions.find((version) => version.id === id) || null;
+}
+
+function buildCompareBalls(selectedVersions) {
+  const segments = [
+    { start: 1, end: 15 },
+    { start: 16, end: 30 },
+    { start: 31, end: 45 },
+  ];
+  const compareBalls = [];
+  const compareRows = {};
+
+  selectedVersions.forEach((version, versionIndex) => {
+    const segment = segments[versionIndex];
+    if (!version || !segment) return;
+    const sourceBalls = cloneBalls(version.balls).filter((ball) => ball.row >= 16 && ball.row <= 30);
+    for (let offset = 0; offset < 15; offset += 1) {
+      const sourceRow = 16 + offset;
+      const mappedRow = segment.start + offset;
+      compareRows[mappedRow] = version.rowIssues?.[sourceRow] || `${version.title || "历史版本"}-${sourceRow}`;
+    }
+    sourceBalls.forEach((ball) => {
+      const mappedRow = segment.start + (ball.row - 16);
+      const mappedNumber = Number(ball.number);
+      if (mappedNumber < 1 || mappedNumber > zones[ball.zone]?.max) return;
+      compareBalls.push({
+        ...ball,
+        row: mappedRow,
+        zone: ball.zone,
+        number: mappedNumber,
+        label: pad(mappedNumber),
+        protected: true,
+      });
+    });
+  });
+
+  return { compareBalls, compareRows };
+}
+
+function populateCompareSelects() {
+  const selects = [compareVersionOne, compareVersionTwo, compareVersionThree];
+  const availableVersions = versions.slice();
+  selects.forEach((select, index) => {
+    if (!select) return;
+    if (index === 2 && availableVersions.length < 3) {
+      select.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "不选择第三个版本";
+      select.append(option);
+      select.value = "";
+      return;
+    }
+    const previous = activeCompareSelection[index] || select.value;
+    select.innerHTML = "";
+    if (index === 2) {
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "不选择第三个版本";
+      select.append(emptyOption);
+    }
+    availableVersions.forEach((version) => {
+      const option = document.createElement("option");
+      option.value = version.id;
+      option.textContent = getVersionLabel(version);
+      select.append(option);
+    });
+    const fallback = index === 2 ? "" : availableVersions[index]?.id || availableVersions[0]?.id || "";
+    select.value = availableVersions.some((version) => version.id === previous) ? previous : fallback;
+  });
+  activeCompareSelection = selects.map((select) => select?.value || "");
+}
+
+function openCompareModal() {
+  if (!versionsUnlocked) {
+    versionAuthMessage.textContent = "请先输入密码验证，再查看对比图。";
+    return;
+  }
+  if (versions.length < 2) {
+    versionAuthMessage.textContent = "至少需要 2 个版本才能生成对比图。";
+    return;
+  }
+  populateCompareSelects();
+  compareHint.textContent = "可选择 2 个或 3 个版本：各版本第 16-30 行会映射到主选号区行分段，选中的号码仍按原号码落位。";
+  compareModal.hidden = false;
+}
+
+function applyCompareView() {
+  const selectedIds = [compareVersionOne.value, compareVersionTwo.value, compareVersionThree.value].filter(Boolean);
+  activeCompareSelection = selectedIds;
+  const selectedVersions = selectedIds.map(getVersionById);
+  if (selectedVersions.length < 2 || selectedVersions.some((version) => !version)) {
+    compareHint.textContent = "请至少选择 2 个有效版本后再加载。";
+    return;
+  }
+
+  const { compareBalls, compareRows } = buildCompareBalls(selectedVersions);
+  const compareTitle = `对比图：${selectedVersions.map((version) => version.title || "历史版本").join(" / ")}`;
+  applyBalls(compareBalls, {
+    baseTitle: compareTitle,
+    rowIssues: compareRows,
+    protectBalls: true,
+  });
+  addHistory(compareTitle, compareBalls);
+  compareHint.textContent = "对比图已加载到主选号区。";
+  compareModal.hidden = true;
+}
+
 function restoreDraft() {
   const draft = readStorage(draftStorageKey);
   if (!draft || !Array.isArray(draft.balls)) {
@@ -558,6 +685,7 @@ function buildBoard() {
       labelCell.dataset.row = row;
       labelCell.dataset.zone = zone;
       if (row % 5 === 0) labelCell.dataset.groupEnd = "true";
+      if (zone === "front" && (row === 15 || row === 30)) labelCell.dataset.frontSplit = "true";
       if (row > drawRows) labelCell.dataset.pick = "true";
       labelCell.textContent = row;
       labelCell.title = `第${row}行`;
@@ -574,7 +702,7 @@ function buildBoard() {
         cell.dataset.value = value;
         if (row > drawRows) cell.dataset.pick = "true";
         if (row % 5 === 0) cell.dataset.groupEnd = "true";
-        if (zone === "front" && (number === 12 || number === 24)) cell.dataset.frontSplit = "true";
+        if (zone === "front" && (row === 15 || row === 30)) cell.dataset.frontSplit = "true";
         cell.textContent = value;
         cell.title = `${config.label} 第 ${row} 行，${value} 号`;
         fragment.append(cell);
@@ -704,6 +832,32 @@ function saveVersion() {
   renderVersions();
   showVersion(version.id);
   addHistory("保存版本", balls);
+}
+
+function saveCurrentBoardAsVersion(title = "") {
+  const balls = cloneBalls(collectBalls());
+  const time = formatTime();
+  const version = {
+    id: makeId(),
+    kind: "custom",
+    time,
+    timestamp: Date.now(),
+    title: title || `版本 ${time}`,
+    balls: cloneBalls(balls),
+    rowIssues: { ...rowIssues },
+  };
+
+  versions.unshift(version);
+  versions = versions.slice(0, 80);
+  writeStorage(versionStorageKey, versions);
+  currentBaseTitle = version.title;
+  updateBaseLabel();
+  updateVersionBanner();
+  persistDraft();
+  renderVersions();
+  showVersion(version.id);
+  addHistory(`保存版本 ${version.title}`, balls);
+  return version;
 }
 
 function extractDate(text) {
@@ -994,6 +1148,7 @@ function renderVersions() {
   document.querySelector(".version-shell").classList.toggle("locked", !versionsUnlocked);
   versionSearch.disabled = !versionsUnlocked;
   clearVersionsButton.disabled = !versionsUnlocked;
+  compareVersionsButton.disabled = !versionsUnlocked || versions.length < 2;
   lockVersionsButton.hidden = !versionsUnlocked;
   unlockVersionsButton.hidden = versionsUnlocked;
   versionPassword.hidden = versionsUnlocked;
@@ -1076,7 +1231,7 @@ function showVersion(id) {
 
   const hint = document.createElement("span");
   hint.className = "history-empty";
-  hint.textContent = balls.length === 0 ? "此版本为空" : "详细信息请点击“查看”打开。";
+  hint.textContent = balls.length === 0 ? "此版本为空" : "历史版本信息不展示颜色、球、行，点击“查看”可打开详情。";
   versionPreview.append(hint);
 }
 
@@ -1248,7 +1403,7 @@ sampleButton.addEventListener("click", () => {
   persistDraft();
 });
 
-saveHistoryButton.addEventListener("click", () => addHistory("保存记录", collectBalls()));
+saveHistoryButton?.addEventListener("click", () => addHistory("保存记录", collectBalls()));
 saveVersionButton.addEventListener("click", saveVersion);
 drawFileInput?.addEventListener("change", handleDrawFileImport);
 generateDrawVersionButton.addEventListener("click", generateDrawVersion);
@@ -1300,11 +1455,22 @@ closeVersionModalButton.addEventListener("click", () => {
   versionModal.hidden = true;
 });
 
+closeCompareModalButton.addEventListener("click", () => {
+  compareModal.hidden = true;
+});
+
 versionModal.addEventListener("click", (event) => {
   if (event.target === versionModal) versionModal.hidden = true;
 });
 
-clearHistoryButton.addEventListener("click", () => {
+compareModal.addEventListener("click", (event) => {
+  if (event.target === compareModal) compareModal.hidden = true;
+});
+
+compareVersionsButton?.addEventListener("click", openCompareModal);
+applyCompareButton?.addEventListener("click", applyCompareView);
+
+clearHistoryButton?.addEventListener("click", () => {
   history = [];
   writeStorage(historyStorageKey, history);
   renderHistory();
@@ -1349,6 +1515,209 @@ updateRowLabels();
 updateVersionBanner();
 updateCount();
 renderHistory();
+renderVersions();
+function getDefaultCompareSelection(sourceVersionId = "") {
+  const availableVersions = versions.slice();
+  if (availableVersions.length < 2) return ["", "", ""];
+  if (!sourceVersionId) {
+    return [
+      availableVersions[1]?.id || availableVersions[0]?.id || "",
+      availableVersions[0]?.id || "",
+      availableVersions[2]?.id || "",
+    ];
+  }
+
+  const sourceIndex = availableVersions.findIndex((version) => version.id === sourceVersionId);
+  if (sourceIndex < 0) {
+    return [
+      availableVersions[1]?.id || availableVersions[0]?.id || "",
+      availableVersions[0]?.id || "",
+      availableVersions[2]?.id || "",
+    ];
+  }
+
+  const previousVersion = availableVersions[sourceIndex + 1] || availableVersions[sourceIndex];
+  const currentVersion = availableVersions[sourceIndex];
+  const nextVersion = availableVersions[sourceIndex - 1] || null;
+  return [previousVersion?.id || "", currentVersion?.id || "", nextVersion?.id || ""];
+}
+
+populateCompareSelects = function populateCompareSelectsOverride() {
+  const selects = [compareVersionOne, compareVersionTwo, compareVersionThree];
+  const availableVersions = versions.slice();
+  const defaults = getDefaultCompareSelection(compareSourceVersionId);
+
+  selects.forEach((select, index) => {
+    if (!select) return;
+    const previous = activeCompareSelection[index] || select.value || defaults[index] || "";
+    select.innerHTML = "";
+
+    if (index === 2) {
+      const emptyOption = document.createElement("option");
+      emptyOption.value = "";
+      emptyOption.textContent = "不选择第三个版本";
+      select.append(emptyOption);
+    }
+
+    availableVersions.forEach((version) => {
+      const option = document.createElement("option");
+      option.value = version.id;
+      option.textContent = getVersionLabel(version);
+      select.append(option);
+    });
+
+    const fallback = defaults[index] || (index === 2 ? "" : availableVersions[index]?.id || availableVersions[0]?.id || "");
+    select.value = availableVersions.some((version) => version.id === previous) ? previous : fallback;
+  });
+
+  if (availableVersions.length < 3 && compareVersionThree) {
+    compareVersionThree.value = "";
+  }
+
+  activeCompareSelection = selects.map((select) => select?.value || "");
+};
+
+openCompareModal = function openCompareModalOverride(sourceVersionId = "") {
+  if (!versionsUnlocked) {
+    versionAuthMessage.textContent = "请先输入密码验证，再查看对比图。";
+    return;
+  }
+  if (versions.length < 2) {
+    versionAuthMessage.textContent = "至少需要 2 个版本才能生成对比图。";
+    return;
+  }
+  compareSourceVersionId = sourceVersionId;
+  activeCompareSelection = [];
+  populateCompareSelects();
+  compareHint.textContent = "默认已选当前版本及前后版本；会取各版本第 16-30 行，并保留原号码位置。";
+  compareModal.hidden = false;
+};
+
+function saveCompareAsVersion() {
+  const selectedIds = [compareVersionOne.value, compareVersionTwo.value, compareVersionThree.value].filter(Boolean);
+  activeCompareSelection = selectedIds;
+  const selectedVersions = selectedIds.map(getVersionById);
+  if (selectedVersions.length < 2 || selectedVersions.some((version) => !version)) {
+    compareHint.textContent = "请至少选择 2 个有效版本后再保存。";
+    return;
+  }
+
+  const { compareBalls, compareRows } = buildCompareBalls(selectedVersions);
+  const compareTitle = `对比图：${selectedVersions.map((version) => version.title || "历史版本").join(" / ")}`;
+  applyBalls(compareBalls, {
+    baseTitle: compareTitle,
+    rowIssues: compareRows,
+    protectBalls: true,
+  });
+  const version = saveCurrentBoardAsVersion(compareTitle);
+  compareHint.textContent = `对比图已保存为版本：${version.title}`;
+  compareModal.hidden = true;
+}
+
+renderVersions = function renderVersionsOverride() {
+  document.querySelector(".version-shell").classList.toggle("locked", !versionsUnlocked);
+  versionSearch.disabled = !versionsUnlocked;
+  clearVersionsButton.disabled = !versionsUnlocked;
+  compareVersionsButton.disabled = !versionsUnlocked || versions.length < 2;
+  lockVersionsButton.hidden = !versionsUnlocked;
+  unlockVersionsButton.hidden = versionsUnlocked;
+  versionPassword.hidden = versionsUnlocked;
+
+  if (!versionsUnlocked) {
+    versionList.innerHTML = `<li class="history-empty">验证后显示历史版本</li>`;
+    versionPreviewTitle.textContent = "未验证";
+    versionPreview.innerHTML = "";
+    versionAuthMessage.textContent = "请输入密码后查看历史版本。";
+    return;
+  }
+
+  versionAuthMessage.textContent = `已验证。${localVersionNotice}历史版本是冻结快照，点击“在此基础上调整”只会复制到当前编辑区。`;
+  const query = versionSearch.value.trim();
+  const matchedVersions = versions.filter((version) => versionMatches(version, query));
+  versionList.innerHTML = "";
+
+  if (matchedVersions.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "history-empty";
+    empty.textContent = query ? "没有匹配的历史版本" : "还没有历史版本";
+    versionList.append(empty);
+    return;
+  }
+
+  matchedVersions.forEach((version) => {
+    const balls = cloneBalls(version.balls);
+    const item = document.createElement("li");
+    item.className = "version-item";
+
+    const info = document.createElement("div");
+    info.className = "version-info";
+    info.innerHTML = `<strong>${version.title || "历史版本"}</strong><span>${balls.length} 个球</span>`;
+
+    const summary = document.createElement("div");
+    summary.className = "version-summary";
+    if (balls.length === 0) {
+      const empty = document.createElement("span");
+      empty.className = "history-empty";
+      empty.textContent = "此版本为空";
+      summary.append(empty);
+    } else {
+      balls.slice(0, 10).forEach((ball) => summary.append(createChip(ball)));
+      if (balls.length > 10) {
+        const more = document.createElement("span");
+        more.className = "version-more";
+        more.textContent = `还有 ${balls.length - 10} 个球`;
+        summary.append(more);
+      }
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "version-actions";
+
+    const viewButton = document.createElement("button");
+    viewButton.type = "button";
+    viewButton.textContent = "查看";
+    viewButton.addEventListener("click", () => {
+      showVersion(version.id);
+      openVersionModal(version.id);
+    });
+
+    const restoreButton = document.createElement("button");
+    restoreButton.type = "button";
+    restoreButton.textContent = "在此基础上调整";
+    restoreButton.addEventListener("click", () => {
+      applyBalls(version.balls, { baseTitle: version.title || "历史版本", rowIssues: version.rowIssues, protectBalls: isDrawVersion(version) });
+      showVersion(version.id);
+      addHistory(`基于 ${version.title || "历史版本"} 调整`, version.balls);
+    });
+
+    const compareButton = document.createElement("button");
+    compareButton.type = "button";
+    compareButton.textContent = "对比图";
+    compareButton.addEventListener("click", () => {
+      showVersion(version.id);
+      openCompareModal(version.id);
+    });
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.textContent = "删除";
+    deleteButton.addEventListener("click", () => {
+      versions = versions.filter((itemVersion) => itemVersion.id !== version.id);
+      writeStorage(versionStorageKey, versions);
+      renderVersions();
+      versionPreviewTitle.textContent = "未选择版本";
+      versionPreview.innerHTML = "";
+    });
+
+    actions.append(viewButton, restoreButton, compareButton, deleteButton);
+    item.append(info, actions);
+    versionList.append(item);
+  });
+};
+
+saveCompareButton?.addEventListener("click", saveCompareAsVersion);
+compareVersionsButton?.addEventListener("click", () => openCompareModal());
+versionSearch.addEventListener("input", () => renderVersions());
 renderVersions();
 sizeInput.value = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--ball-size"), 10);
 fitBoardToScreen(true);

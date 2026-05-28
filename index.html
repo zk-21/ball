@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>选号模拟</title>
-    <link rel="stylesheet" href="styles.css?v=20260514-12" />
+    <link rel="stylesheet" href="styles.css?v=20260528-4" />
   </head>
   <body>
     <section id="appLock" class="app-lock">
@@ -34,7 +34,7 @@
         <div class="controls">
           <label>
             <span>行</span>
-            <input id="rowInput" type="number" min="1" max="35" value="1" />
+            <input id="rowInput" type="number" min="1" max="45" value="1" />
           </label>
           <label>
             <span>区</span>
@@ -113,6 +113,7 @@
             <button id="unlockVersionsButton" type="button">验证</button>
             <button id="lockVersionsButton" type="button" hidden>锁定</button>
             <input id="versionSearch" type="search" placeholder="查找时间、号码、颜色" />
+            <button id="compareVersionsButton" type="button">查看对比图</button>
             <button id="clearVersionsButton" type="button">清空版本</button>
           </div>
         </div>
@@ -159,7 +160,6 @@
           </div>
           <div class="board-actions">
             <button id="sampleButton" class="ghost" type="button">生成示例</button>
-            <button id="saveHistoryButton" class="ghost" type="button">保存记录</button>
             <button id="saveVersionButton" class="ghost" type="button">保存版本</button>
           </div>
           <span id="currentBaseLabel" class="base-label">当前编辑：空白画面</span>
@@ -182,14 +182,6 @@
         </div>
       </section>
 
-      <section class="history-shell" aria-label="历史记录">
-        <div class="history-top">
-          <h2>操作记录</h2>
-          <button id="clearHistoryButton" type="button">清空记录</button>
-        </div>
-        <ol id="historyList" class="history-list"></ol>
-      </section>
-
       <div id="versionModal" class="version-modal" hidden>
         <div class="version-dialog" role="dialog" aria-modal="true" aria-labelledby="versionModalTitle">
           <div class="version-dialog-top">
@@ -199,9 +191,37 @@
           <div id="versionModalBody" class="version-detail-list"></div>
         </div>
       </div>
+
+      <div id="compareModal" class="version-modal" hidden>
+        <div class="version-dialog compare-dialog" role="dialog" aria-modal="true" aria-labelledby="compareModalTitle">
+          <div class="version-dialog-top">
+            <h2 id="compareModalTitle">三版本对比图</h2>
+            <button id="closeCompareModalButton" type="button">关闭</button>
+          </div>
+          <div class="compare-form">
+            <label>
+              <span>版本一</span>
+              <select id="compareVersionOne"></select>
+            </label>
+            <label>
+              <span>版本二</span>
+              <select id="compareVersionTwo"></select>
+            </label>
+            <label>
+              <span>版本三</span>
+              <select id="compareVersionThree"></select>
+            </label>
+          </div>
+          <p id="compareHint" class="version-auth-message">将每个版本的第 16-30 行映射到主选号区行 1-15、16-30、31-45，前区和后区的选球都会按原号码落位。</p>
+          <div class="compare-actions">
+            <button id="applyCompareButton" type="button">加载到主选号区</button>
+            <button id="saveCompareButton" class="ghost" type="button">一键保存为版本</button>
+          </div>
+        </div>
+      </div>
     </main>
 
     <script src="vendor/xlsx.full.min.js"></script>
-    <script src="script.js?v=20260520-1"></script>
+    <script src="script.js?v=20260528-10"></script>
   </body>
 </html>
